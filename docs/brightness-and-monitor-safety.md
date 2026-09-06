@@ -188,3 +188,57 @@ choices without clicking and confirm the active value remains unchanged; scroll
 across brightness and confirm only panel content moves; enter a name, leave the
 field, wait over four seconds, then save; open resolution search, type and cancel
 without choosing a mode.
+
+
+## Click-focused brightness and Restore Defaults (current behavior)
+
+Clicking the brightness slider now takes keyboard focus and permits both dragging
+and wheel adjustments (five percentage points per wheel event). Hover alone
+continues to pass scrolling to the panel. Leaving the slider, choosing another
+control/monitor, or closing the panel ends wheel adjustment. Pressed drags retain
+the mouse grab, so the surrounding ScrollView cannot steal the gesture. The
+slider remains responsive during hardware reads/writes; it coalesces pending
+brightness values to the latest requested target and writes serially. This
+supersedes the earlier unconditional wheel blocking described above. A parent /
+child enabled-state dependency was removed to prevent disabling the slider.
+
+The **Restore Defaults** section contains a **Restore Defaults** button. Clicking
+it immediately applies the stated scope, after preflight and recovery backup:
+
+- All literal monitor declarations in `~/.config/hypr/monitors.lua`: preferred
+  mode, automatic scale and position, normal orientation. Unrelated fields,
+  globals, comments, workspace rules and bindings are preserved.
+- Existing terminal configurations: font sizes from the installed Omarchy
+  templates (currently 9pt). Other terminal settings are preserved. Reopen
+  terminals to apply fonts; this action does not terminate terminal processes.
+- Every saved display alias, including disconnected monitors: cleared.
+- Existing plugin monitor cache: cleared; terminal-size cache updated.
+- Hardware brightness: unchanged, because Omarchy defines no factory/default
+  brightness percentage. This is stated beside the button.
+
+The monitor policy is verified against `/usr/share/omarchy/config/hypr/monitors.lua`
+before writing; unknown future syntax/policy is refused instead of guessed.
+Terminal defaults are read from `/usr/share/omarchy/config` at invocation. This
+restores installed defaults, not a snapshot of personal settings from first use.
+Complex monitor declarations or ambiguous font-size settings require manual
+restoration. Other Hyprland files can override these settings; they are not reset.
+
+Preview without applying: `python3 bin/restore-defaults.py --dry-run`.
+Apply using the button or `python3 bin/restore-defaults.py`. The helper uses the
+monitor editor lock and display-name lock, validates Lua and existing Hyprland
+errors, saves files, reloads, and checks configuration errors and active outputs.
+Failures roll back files that still match its writes, preserving concurrent edits.
+Backups are in `~/.local/state/better-displays/defaults-backups/<UTC timestamp>/`.
+`manifest.json` maps each original path to its backup and permission mode; a null
+backup means the original did not exist. To undo, close the panel, restore those
+listed files (remove newly created files listed with null), then run `hyprctl
+reload` and `hyprctl configerrors`. Resolve concurrent edits selectively. Automatic
+rollback detects errors; it is not a timed visual keep/revert dialog.
+
+Validation: five restore tests cover policy recognition/refusal, scoped file
+changes, successful apply, failed-reload rollback and concurrent edit preservation.
+Run `python3 tests/test-restore-defaults.py -v`. The existing thirteen Python
+regressions pass. Qt slider tests now cover five input behaviors (seven passes
+including setup/cleanup), including click-to-enable wheel and leave-to-scroll.
+The real-machine restore preview passes; restoration itself is intentionally
+not triggered as part of installing the button.

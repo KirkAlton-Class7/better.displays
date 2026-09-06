@@ -34,6 +34,7 @@ Item {
     name: "ClickSlider"
     when: windowShown
     function init() {
+      slider.focus = false
       scroll.contentItem.contentY = 0
       slider.value = 50
       slider.liveValue = 50
@@ -46,6 +47,22 @@ Item {
       tryVerify(function() { return scroll.contentItem.contentY > 0 })
       compare(slider.value, 50)
       compare(slider.liveValue, 50)
+      compare(committed.count, 0)
+    }
+    function test_click_enables_wheel_until_pointer_leaves() {
+      mouseMove(slider, 150, 10)
+      mouseClick(slider, 150, 10)
+      verify(slider.activeFocus)
+      committed.clear()
+      mouseWheel(slider, 150, 10, 0, 120)
+      compare(committed.count, 1)
+      compare(committed.signalArguments[0][0], 55)
+      compare(scroll.contentItem.contentY, 0)
+      mouseMove(scroll, 350, 200)
+      tryVerify(function() { return !slider.activeFocus })
+      committed.clear()
+      mouseWheel(slider, 150, 10, 0, -120)
+      tryVerify(function() { return scroll.contentItem.contentY > 0 })
       compare(committed.count, 0)
     }
     function test_click_commits_once() {

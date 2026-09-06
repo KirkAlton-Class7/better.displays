@@ -15,6 +15,7 @@ Panel {
   property string selected: ""
   property var terminalSizes: ({})
   property int brightnessPercent: 0
+  property int pendingBrightness: -1
   property bool brightnessAvailable: false
   property string brightnessMessage: "Select a monitor"
   property string actionError: ""
@@ -106,7 +107,7 @@ Panel {
 
   function editName(reset) {
     var m = root.selectedMonitor()
-    if (!m || !m.displayIdentity || nameAction.running) return
+    if (!m || !m.displayIdentity || nameAction.running || defaultsProc.running) return
     nameAction.command = ["python3", root.scriptDir + "/display-names.py", reset ? "reset" : "save",
                           "--output", m.name, "--identity", m.displayIdentity]
     if (!reset) nameAction.command = nameAction.command.concat(["--label", nameField.text])
@@ -130,6 +131,8 @@ Panel {
   }
 
   onSelectedChanged: {
+    root.pendingBrightness = -1
+    if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
     root.loadNameField()
     root.brightnessAvailable = false
     root.brightnessMessage = "Reading brightness…"
@@ -137,11 +140,17 @@ Panel {
   }
 
   function setBrightness(value) {
-    if (!root.brightnessAvailable || brightnessWrite.running || brightnessRead.running) return
+    if (!root.brightnessAvailable || defaultsProc.running) return
+    root.pendingBrightness = Math.max(1, Math.min(100, Math.round(value)))
+    root.brightnessPercent = root.pendingBrightness
+    flushBrightness()
+  }
+
+  function flushBrightness() {
+    if (brightnessWrite.running || brightnessRead.running || pendingBrightness < 0) return
     brightnessWrite.monitor = root.selected
-    var percent = Math.max(1, Math.min(100, Math.round(value)))
-    brightnessWrite.command = ["timeout", "12", "omarchy", "brightness", "display", "--no-osd", "--monitor", brightnessWrite.monitor, percent + "%"]
-    root.brightnessMessage = "Applying…"
+    brightnessWrite.command = ["timeout", "12", "omarchy", "brightness", "display", "--no-osd", "--monitor", root.selected, pendingBrightness + "%"]
+    pendingBrightness = -1
     brightnessWrite.running = true
   }
 
@@ -210,14 +219,14 @@ Panel {
 
   function setMonitor(flag, val) {
     var m = root.selectedMonitor()
-    if (!m || actionProc.running) return
+    if (!m || actionProc.running || defaultsProc.running) return
     root.actionError = ""
     actionProc.command = [root.scriptDir + "/omarchy-display-monitor", "set", m.name, flag, String(val)]
     if (!actionProc.running) actionProc.running = true
   }
 
   function setTerminal(term, size) {
-    if (actionProc.running) return
+    if (actionProc.running || defaultsProc.running) return
     root.actionError = ""
     actionProc.command = [root.scriptDir + "/omarchy-display-terminal", "set", term, String(size)]
     if (!actionProc.running) actionProc.running = true
@@ -280,13 +289,29 @@ Panel {
     if (!installProc.running) installProc.running = true
   }
 
-  onOpenedChanged: if (opened) { cursorActive = false; refresh() }
+  onOpenedChanged: {
+    if (opened) { cursorActive = false; refresh() }
+    else if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
+  }
 
   Timer {
     interval: 4000
     running: root.opened
     repeat: true
     onTriggered: root.refresh()
+  }
+
+  property string defaultsMessage: ""
+  Process {
+    id: defaultsProc
+    command: ["python3", root.scriptDir + "/restore-defaults.py"]
+    stdout: StdioCollector { id: defaultsOutput; waitForEnd: true }
+    stderr: StdioCollector { id: defaultsError; waitForEnd: true }
+    onExited: function(code, status) {
+      root.defaultsMessage = String(code === 0 && status === 0 ? defaultsOutput.text : defaultsError.text).trim()
+      nameField.dirty = false
+      root.refresh()
+    }
   }
 
   Process {
@@ -382,7 +407,8 @@ Panel {
       var raw = String(brightnessOutput.text || "").trim()
       var valid = code === 0 && status === 0 && /^[0-9]+$/.test(raw) && Number(raw) <= 100
       root.brightnessAvailable = valid
-      if (valid) root.brightnessPercent = Number(raw)
+      if (valid && root.pendingBrightness < 0 && !brightnessSlider.dragging) root.brightnessPercent = Number(raw)
+      root.flushBrightness()
       root.brightnessMessage = valid ? "" : "Brightness unavailable for " + root.displayName(monitor)
     }
   }
@@ -394,9 +420,11 @@ Panel {
     stderr: StdioCollector { waitForEnd: true }
     onExited: function(code, status) {
       if (monitor === root.selected && (code !== 0 || status !== 0)) {
+        root.pendingBrightness = -1
         root.brightnessAvailable = false
         root.brightnessMessage = "Could not change brightness on " + root.displayName(monitor)
-      } else root.refreshBrightness()
+      } else if (root.pendingBrightness >= 0) root.flushBrightness()
+      else root.refreshBrightness()
     }
   }
 
@@ -572,9 +600,9 @@ Panel {
           width: parent.width
           implicitHeight: brightnessSlider.implicitHeight + Style.space(8)
           visible: root.brightnessAvailable
-          enabled: brightnessSlider.enabled
+          enabled: !defaultsProc.running
           foreground: root.bar.foreground
-          hasCursor: root.cursorOn(brightnessRow)
+          hasCursor: brightnessSlider.activeFocus || root.cursorOn(brightnessRow)
           function activate() { /* Left/right adjusts this row, as in Display. */ }
           HoverHandler { onHoveredChanged: if (hovered) root.pointCursor(brightnessRow) }
         ClickSlider {
@@ -583,15 +611,20 @@ Panel {
           anchors.margins: Style.space(4)
           bar: root.bar
           visible: root.brightnessAvailable
-          enabled: !brightnessRead.running && !brightnessWrite.running
+          enabled: root.brightnessAvailable
           minimum: 1
           maximum: 100
           step: 1
           integer: true
           value: root.brightnessPercent
           property string dragMonitor: ""
+          Keys.onEscapePressed: keyCatcher.forceActiveFocus()
+          Keys.onLeftPressed: root.setBrightness(root.brightnessPercent - 5)
+          Keys.onRightPressed: root.setBrightness(root.brightnessPercent + 5)
+          Keys.onUpPressed: { keyCatcher.forceActiveFocus(); root.moveCursor(0, -1) }
+          Keys.onDownPressed: { keyCatcher.forceActiveFocus(); root.moveCursor(0, 1) }
           onDraggingChanged: if (dragging) dragMonitor = root.selected
-          onReleased: function(v) { if (dragMonitor === root.selected) root.setBrightness(v) }
+          onReleased: function(v) { if (!brightnessSlider.dragging && (brightnessSlider.activeFocus || dragMonitor === root.selected)) root.setBrightness(v) }
         }
         }
         Text {
@@ -775,6 +808,33 @@ Panel {
           }
         }
 
+        PanelSeparator { foreground: root.bar.foreground }
+        PanelSectionHeader { text: "Restore Defaults"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        Text {
+          width: parent.width
+          text: "Restore all configured monitors to preferred resolution, automatic scale/position and normal orientation. Reset terminal font sizes from Omarchy templates and clear all saved display names. Hardware brightness has no Omarchy default and stays unchanged. A recovery backup is saved first."
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+        }
+        NavigationButton {
+          navRow: 12
+          text: defaultsProc.running ? "Restoring…" : "Restore Defaults"
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          enabled: !defaultsProc.running && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+          onClicked: { root.actionError = ""; defaultsProc.running = true }
+        }
+        Text {
+          width: parent.width
+          text: root.defaultsMessage
+          visible: text !== ""
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+        }
         Item { width: parent.width; height: Style.space(4) }
       }
     }
