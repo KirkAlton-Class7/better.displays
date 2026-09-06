@@ -29,23 +29,24 @@ current_size() {
   local term="$1" f
   f="$(conf_for "$term")"
   [[ -f $f ]] || { echo "n/a"; return; }
-  case "$term" in
+  { case "$term" in
     alacritty) grep -oP '^size[[:space:]]*=[[:space:]]*\K[0-9.]+' "$f" | head -1 ;;
     kitty)     grep -oP '^font_size[[:space:]]+\K[0-9.]+' "$f" | head -1 ;;
     ghostty)   grep -oP '^font-size = \K[0-9.]+' "$f" | head -1 ;;
     foot)      grep -oP ':size=\K[0-9.]+' "$f" | head -1 ;;
-  esac
+  esac; } || echo "n/a"
 }
 
 apply_size() {
   local term="$1" pt="$2" f
   f="$(conf_for "$term")"
-  [[ -f $f ]] || { echo "  (no $term config at $f — skipped)" >&2; return; }
+  [[ -f $f ]] || { echo "No $term config at $f" >&2; return 1; }
+  [[ $(current_size "$term") != "n/a" ]] || { echo "No explicit font size in $f; configure it first" >&2; return 1; }
   case "$term" in
     alacritty)
       sed -i -E "s/^size[[:space:]]*=.*/size = $pt/" "$f" ;;
     kitty)
-      sed -i -E "s/^font_size[[:space:]]+.*/font_size $pt.0/" "$f"
+      sed -i -E "s/^font_size[[:space:]]+.*/font_size $pt/" "$f"
       pkill -USR1 kitty 2>/dev/null || true ;;
     ghostty)
       sed -i -E "s/^font-size = .*/font-size = $pt/" "$f"
@@ -60,7 +61,7 @@ persist_terminal() {
   mkdir -p "$(dirname "$DISPLAYS_JSON")"
   [[ -f $DISPLAYS_JSON ]] || echo '{"monitors":{},"terminals":{}}' >"$DISPLAYS_JSON"
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp "$CONFIG_DIR/.displays.XXXXXX")"
   jq --arg t "$term" --argjson p "$pt" '.terminals = (.terminals // {}) | .terminals[$t] = $p' \
     "$DISPLAYS_JSON" >"$tmp"
   mv "$tmp" "$DISPLAYS_JSON"
@@ -80,11 +81,21 @@ cmd_list() {
   done
 }
 
+validate_size() {
+  awk -v size="$1" 'BEGIN { exit !(size >= 6 && size <= 40) }' || { echo "Size must be between 6 and 40" >&2; return 1; }
+}
+
+validate_cache() {
+  [[ ! -e $DISPLAYS_JSON ]] || jq -e 'type == "object" and ((.terminals // {}) | type == "object")' "$DISPLAYS_JSON" >/dev/null
+}
+
 cmd_set() {
   local term="${1:-}" pt="${2:-}"
   [[ -n $term && -n $pt ]] || { echo "Usage: omarchy display terminal set <terminal> <size>" >&2; exit 1; }
   [[ " ${TERMINALS[*]} " == *" $term "* ]] || { echo "Unknown terminal: $term" >&2; exit 1; }
   [[ $pt =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "Size must be numeric" >&2; exit 1; }
+  validate_size "$pt"
+  validate_cache
   apply_size "$term" "$pt"
   persist_terminal "$term" "$pt"
   echo "$term font size -> $pt"
@@ -95,6 +106,11 @@ cmd_set_all() {
   local pt="${1:-}"
   [[ -n $pt ]] || { echo "Usage: omarchy display terminal set-all <size>" >&2; exit 1; }
   [[ $pt =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "Size must be numeric" >&2; exit 1; }
+  validate_size "$pt"
+  validate_cache
+  for t in "${TERMINALS[@]}"; do
+    [[ $(current_size "$t") != "n/a" ]] || { echo "No explicit font size for $t; no files changed" >&2; return 1; }
+  done
   for t in "${TERMINALS[@]}"; do
     apply_size "$t" "$pt"
     persist_terminal "$t" "$pt"

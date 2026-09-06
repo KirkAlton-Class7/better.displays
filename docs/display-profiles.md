@@ -12,10 +12,24 @@ only to the selected hardware identity and closes the editor. Cancel or Escape
 discards the draft; switching monitor or closing the panel also closes the editor.
 Naming is unavailable for displays without an unambiguous identity.
 
-The **Profiles** section holds the dropdown, **Make Preferred / Preferred** toggle
-and **Save Current Setup**. The **Restore** section beneath it holds **Restore
-Setup** and **Restore Omarchy Defaults**, with **Undo Last Restore** on its own
-row underneath. These controls retain preview and timed confirmation.
+**Manage Profiles** contains **Make Preferred**, **Save**, and **Delete**.
+The dropdown is in **Restore**, above Restore Setup and Restore Omarchy Defaults;
+Undo Last Restore remains underneath. Selection in that dropdown determines the
+profile managed by Make Preferred and Delete. The preferred button retains its
+label and highlights only for the one preferred selection; clicking again clears
+it. Saving creates and selects a new profile. Save feedback and errors appear
+immediately below Manage Profiles, with automatic scrolling to the message.
+
+Delete expands an inline confirmation naming the selected profile. Cancel makes
+no changes. Confirm Delete deletes only that captured profile ID; changing the
+selector or closing the widget cancels confirmation. The preferred flag is cleared
+only when that profile was preferred. Existing display settings and independent
+restore history are untouched. A private recovery copy is retained at
+`~/.local/state/better-displays/profiles/deleted-profiles/ID.json`. Copy it back to
+`~/.config/better_displays/profiles/ID.json` to recover it (then choose preference
+again if desired). CLI deletion requires `delete --id ID --confirm`; missing
+confirmation is refused before any write. The same lock serializes save, preference,
+delete and restore; deletion during a pending restore is refused.
 
 The controls offer:
 
@@ -23,8 +37,8 @@ The controls offer:
 | --- | --- |
 | Profile selector | Choose a saved setup without changing hardware. |
 | Restore Setup | Preview the selected setup, then choose Apply and Test. |
-| Save Current Setup | Reveal the setup name, optional inclusions and Save New Profile. |
-| Make Preferred / Preferred | Toggle the selected profile as preferred. Setting another replaces the old choice; clicking Preferred clears it. Does not apply a setup. |
+| Save | Reveal the setup name, optional inclusions and Save New Profile. |
+| Make Preferred | Toggle the selected profile as preferred. Setting another replaces the old choice; clicking the active button clears it. Does not apply a setup. |
 | Undo Last Restore | Preview the exact backup of the last kept restore. |
 | Restore Omarchy Defaults | Preview a reset that explicitly warns custom fixes and aliases will be replaced. |
 | Keep Changes | Keep the applied setup within the 20-second confirmation window. |
@@ -33,11 +47,11 @@ The controls offer:
 Editors and previews expand only when requested. Keyboard navigation scrolls
 expanded controls into view. Normal panel shortcuts are suspended while typing
 or searching. A working profile is never overwritten automatically or by Save:
-duplicate names (case insensitive) are rejected. Save a new name for a revision.
+duplicate names (case insensitive) are rejected with “That profile name already exists. Save with a different name.” Save a new name for a revision.
 The first profile becomes preferred. The toggle follows the selected dropdown
 entry immediately: it is active only for the single saved preferred ID. Changes
 made in another widget instance synchronize through the persisted preference.
-Clicking Preferred clears the preference; with none set the selector falls back
+Clicking the active Make Preferred button clears the preference; with none set the selector falls back
 to an available profile without marking it preferred. Saving another profile
 does not override an explicitly cleared preference.
 

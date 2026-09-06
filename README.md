@@ -160,7 +160,7 @@ are in [the configuration runbook](docs/brightness-and-monitor-safety.md#click-f
 
 ### Named setups (version 1.3)
 
-Use **Save Current Setup** to reveal profile naming and optional brightness/font
+Use **Save** in **Manage Profiles** to reveal profile naming and optional brightness/font
 inclusions. **Restore Setup** previews a saved configuration, then **Apply and
 Test** offers **Keep Changes / Revert Now**. **Make Preferred** chooses your normal
 restore profile. **Undo Last Restore** recovers the last kept restore when its
@@ -178,9 +178,18 @@ timed rollback and driver fallback handling. This supersedes the older direct
 reset flow described in historical enhancement notes.
 
 
-The Profiles and Restore action buttons use shared bordered controls and spacing.
-The preferred toggle has a stable width so its shorter active label does not move
-Save Current Setup. The restore actions can wrap on narrow panels; Undo stays
-underneath. Button labels have no trailing ellipses. CLI `prefer --id ID` remains
-idempotent; `toggle-preferred --id ID` performs the widget's atomic toggle under
-the shared lock.
+Manage Profiles contains **Make Preferred**, **Save**, and **Delete**. The profile
+selector lives in **Restore** and determines which profile preference/deletion
+acts on. Make Preferred remains a clearable, exclusive toggle. Delete asks for
+confirmation naming the selected profile and retains a private recovery copy.
+Save feedback and errors appear below Manage Profiles. Existing profile names
+report: “That profile name already exists. Save with a different name.”
+
+Scale buttons now disable exact scales incompatible with the current resolution.
+Rows and columns reflow when changing scale, resolution or orientation, preserving
+screen order, gaps and perpendicular offsets. Complex layouts refuse new overlap.
+Every edit checks all connected displays, including preserved resolutions, and
+retries a driver fallback once before reporting failure and recovering.
+
+Verification: 46 Python tests and five Qt input behavior cases (seven Qt passes
+including setup/cleanup). See the runbooks for coverage and hardware limitations.

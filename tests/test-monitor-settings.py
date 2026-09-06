@@ -44,6 +44,53 @@ class MonitorTests(unittest.TestCase):
         proposal, _ = m.proposal(a, args, [a, b])
         self.assertFalse(m.overlaps(proposal, b))
 
+    def test_scale_presets_reflow_row_and_preserve_gap(self):
+        a = dict(name='A', width=1920, height=1080, refreshRate=60, scale=2, x=0, y=0, transform=0)
+        b = dict(a, name='B', x=960, y=100)
+        c = dict(a, name='C', x=2000)
+        for scale in (1, 1.25, 1.5, 1.6, 2, 3, 4):
+            args = argparse.Namespace(mode=None, scale=scale, pos=None, transform=None)
+            proposed, _ = m.proposal(b, args, [a, b, c], reflow=True)
+            actual = m.arrange([a, b, c], proposed, args)
+            self.assertEqual(actual[0], a)
+            self.assertEqual(actual[1]['x'], 960)
+            self.assertEqual(actual[2]['x'], 960 + 1920 / scale + 80)
+            self.assertEqual(actual[1]['y'], 100)
+            self.assertFalse(m.overlaps(actual[1], actual[2]))
+
+    def test_column_orientation_reflows_and_manual_overlap_still_refused(self):
+        a = dict(name='A', width=1920, height=1080, scale=2, x=0, y=0, transform=0)
+        b = dict(a, name='B', y=540)
+        args = argparse.Namespace(mode=None, scale=None, pos=None, transform=1)
+        proposed, _ = m.proposal(a, args, [a, b], reflow=True)
+        actual = m.arrange([a, b], proposed, args)
+        self.assertEqual(actual[1]['y'], 960)
+        args.pos = '0x300'
+        with self.assertRaisesRegex(ValueError, 'overlap'): m.arrange([a, b], dict(b, y=300), args)
+
+    def test_1440p_invalid_exact_scales_are_rejected(self):
+        a = dict(name='A', width=2560, height=1440, scale=2, x=0, y=0, transform=0)
+        for scale in (1.5, 3):
+            with self.assertRaisesRegex(ValueError, 'whole logical pixels'):
+                m.proposal(a, argparse.Namespace(mode=None, scale=scale, pos=None, transform=None), [a], reflow=True)
+
+    def test_preserved_mode_fallback_reinitializes_only_affected_display(self):
+        import json
+        a = dict(name='A', width=1920, height=1080, refreshRate=60, scale=1.5, x=0, y=0, transform=0, serial='a')
+        b = dict(a, name='B', width=2560, height=1440, serial='b', x=1280, scale=2)
+        actual = [a, dict(b, width=2048, height=1280)]
+        calls = []
+        def run(*args):
+            calls.append(args)
+            if 'monitors' in args: return json.dumps(actual)
+            if args == ('hyprctl', 'reload'): actual[1] = b
+            return ''
+        with patch.object(m, 'run', side_effect=run), patch.object(m.time, 'sleep'):
+            m.verify_layout([a, b])
+        dispatches = [args for args in calls if 'dispatch' in args]
+        self.assertEqual(len(dispatches), 1)
+        self.assertIn('"B"', dispatches[0][-1])
+
     def test_atomic_write_retains_mode(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / 'monitors.lua'

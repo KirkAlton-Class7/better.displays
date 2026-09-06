@@ -140,7 +140,7 @@ def save_profile(name, brightness=False, terminals=False):
     name = label(name)
     for path in PROFILES.glob('*.json'):
         existing = validate(read_json(path))
-        if existing['name'].casefold() == name.casefold(): raise ValueError('That profile name already exists. Save a new name; working profiles are never overwritten.')
+        if existing['name'].casefold() == name.casefold(): raise ValueError('That profile name already exists. Save with a different name.')
     profile = capture(name, brightness, terminals)
     key = uuid.uuid4().hex
     write_json(PROFILES / (key + '.json'), profile)
@@ -156,6 +156,23 @@ def set_preferred(key, toggle=False):
     selected = '' if toggle and current == key else key
     write_json(path, {'id': selected})
     return dict(preferred=selected, message='Preferred restore profile updated.' if selected else 'No preferred restore profile selected.')
+
+
+def delete_profile(key, confirmed=False):
+    if not confirmed: raise ValueError('Deleting a profile requires --confirm')
+    path = PROFILES / (identifier(key) + '.json')
+    profile = validate(read_json(path))
+    # Keep a recoverable private copy; deleting a profile never applies it or
+    # changes monitor settings, aliases, or the independent restore history.
+    backup = STATE / 'deleted-profiles' / (key + '.json')
+    write_json(backup, profile)
+    preferred_path = PROFILES.parent / 'preferred-profile.json'
+    preferred = read_json(preferred_path, {}).get('id', '')
+    if preferred == key:
+        preferred = ''
+        write_json(preferred_path, {'id': ''})
+    path.unlink()
+    return dict(preferred=preferred, message='Profile deleted. A recovery copy was saved to ' + str(backup))
 
 
 def edit_profile_monitor(text, connector, fields):
@@ -420,7 +437,8 @@ def public_status():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['list', 'save', 'prefer', 'toggle-preferred', 'preview', 'start', 'keep', 'revert', 'status'])
+    parser.add_argument('action', choices=['list', 'save', 'prefer', 'toggle-preferred', 'delete', 'preview', 'start', 'keep', 'revert', 'status'])
+    parser.add_argument('--confirm', action='store_true')
     parser.add_argument('--name')
     parser.add_argument('--id', default='')
     parser.add_argument('--kind', choices=['profile', 'defaults', 'undo'], default='profile')
@@ -488,6 +506,7 @@ def main():
             if args.action == 'save': print(encoded(dict(id=save_profile(args.name, args.brightness, args.terminals), message='Setup saved as a new profile.')))
             elif args.action in ('prefer', 'toggle-preferred'):
                 print(encoded(set_preferred(args.id, toggle=args.action == 'toggle-preferred')))
+            elif args.action == 'delete': print(encoded(delete_profile(args.id, args.confirm)))
             elif args.action == 'preview':
                 plan, _, _, summary = build(args.kind, args.id)
                 preflight(plan)

@@ -42,6 +42,7 @@ Panel {
     if (kind) command = command.concat(["--kind", kind])
     if (id) command = command.concat(["--id", id])
     if (action === "keep" || action === "revert") command = command.concat(["--token", root.restoreState.token])
+    if (action === "delete") command.push("--confirm")
     if (action === "save") {
       command = command.concat(["--name", profileNameField.text])
       if (root.saveBrightness) command.push("--brightness")
@@ -251,6 +252,12 @@ Panel {
     root.refreshBrightness()
   }
 
+  function validScale(value) {
+    var m = selectedMonitor()
+    if (!m) return false
+    return [m.width, m.height].every(function(size) { return Math.abs(size / Number(value) - Math.round(size / Number(value))) <= 0.01 })
+  }
+
   function setMonitor(flag, val) {
     var m = root.selectedMonitor()
     if (!m || actionProc.running || root.restoreBusy) return
@@ -335,6 +342,7 @@ Panel {
       if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
       root.nameEditing = false
       root.profileEditing = false
+      root.deleteProfileId = ""
       root.previewText = ""
     }
   }
@@ -347,6 +355,9 @@ Panel {
   }
 
   property string defaultsMessage: ""
+  property string manageMessage: ""
+  property string deleteProfileId: ""
+  property string deleteProfileLabel: ""
   Timer {
     interval: 1000
     running: root.opened
@@ -379,7 +390,12 @@ Panel {
     stdout: StdioCollector { id: defaultsOutput; waitForEnd: true }
     stderr: StdioCollector { id: defaultsError; waitForEnd: true }
     onExited: function(code, status) {
-      if (code !== 0 || status !== 0) root.defaultsMessage = String(defaultsError.text).trim()
+      if (code !== 0 || status !== 0) {
+        if (["save", "delete", "prefer", "toggle-preferred"].indexOf(action) >= 0) {
+          root.manageMessage = String(defaultsError.text).trim()
+          Qt.callLater(function() { root.reveal(manageFeedback) })
+        } else root.defaultsMessage = String(defaultsError.text).trim()
+      }
       else {
         try {
           var result = JSON.parse(defaultsOutput.text)
@@ -388,8 +404,14 @@ Panel {
             root.selectedProfile = result.id
             root.profileEditing = false
             keyCatcher.forceActiveFocus()
-            root.defaultsMessage = result.message
-          } else if (action === "prefer" || action === "toggle-preferred") { root.preferredProfile = result.preferred; root.defaultsMessage = result.message }
+            root.manageMessage = result.message
+            Qt.callLater(function() { root.reveal(manageFeedback) })
+          } else if (action === "prefer" || action === "toggle-preferred" || action === "delete") {
+            root.preferredProfile = result.preferred
+            root.manageMessage = result.message
+            if (action === "delete") { root.deleteProfileId = ""; root.previewText = "" }
+            Qt.callLater(function() { root.reveal(manageFeedback) })
+          }
           else {
             root.restoreState = result
             root.previewText = ""
@@ -480,7 +502,10 @@ Panel {
     stdout: StdioCollector { id: actionOutput; waitForEnd: true }
     stderr: StdioCollector { id: actionStderr; waitForEnd: true }
     onExited: function(code, status) {
-      if (code !== 0 || status !== 0) root.actionError = String(actionStderr.text || actionOutput.text || "Change failed").trim()
+      if (code !== 0 || status !== 0) {
+        root.actionError = String(actionStderr.text || actionOutput.text || "Change failed").trim()
+        Qt.callLater(function() { root.reveal(actionMessage) })
+      }
       root.refresh()
     }
   }
@@ -736,6 +761,7 @@ Panel {
         }
         Text {
           width: parent.width
+          id: actionMessage
           visible: root.actionError !== ""
           text: root.actionError
           textFormat: Text.PlainText
@@ -779,6 +805,7 @@ Panel {
                 navColumn: index
                 required property string modelData
                 text: modelData + "x"
+                enabled: !root.restoreBusy && !actionProc.running && root.validScale(modelData)
                 foreground: root.bar.foreground
                 fontFamily: root.bar.fontFamily
                 fontSize: Style.font.caption
@@ -794,7 +821,7 @@ Panel {
 
           Text {
             width: parent.width
-            text: "Scaling keeps screen positions. Adjust Position if gaps appear."
+            text: "Scaling adjusts neighboring positions in rows and columns, preserving gaps. Disabled scales do not fit this resolution exactly."
             color: root.bar.foreground
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
@@ -917,23 +944,7 @@ Panel {
         }
 
         PanelSeparator { foreground: root.bar.foreground }
-        PanelSectionHeader { text: "Profiles"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
-        SearchableDropdown {
-          id: profileDropdown
-          property int navRow: 12
-          property int navColumn: 0
-          width: parent.width
-          foreground: root.bar.foreground
-          placeholderText: "No saved setups"
-          options: root.profiles
-          value: root.selectedProfile
-          enabled: !root.restoreBusy && root.profiles.length > 0
-          hasCursor: root.cursorOn(profileDropdown)
-          function activate() { open() }
-          onHovered: function(inside) { if (inside) root.pointCursor(profileDropdown) }
-          onPopupOpenChanged: if (!popupOpen) keyCatcher.forceActiveFocus()
-          onChanged: function(v) { root.selectedProfile = v; root.previewText = "" }
-        }
+        PanelSectionHeader { text: "Manage Profiles"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
         Flow {
           width: parent.width
           spacing: Style.spacing.xs
@@ -941,7 +952,7 @@ Panel {
             bordered: true
             navRow: 13; navColumn: 0
             width: Style.space(150)
-            text: !!root.selectedProfile && root.selectedProfile === root.preferredProfile ? "Preferred" : "Make Preferred"
+            text: "Make Preferred"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             active: !!root.selectedProfile && root.selectedProfile === root.preferredProfile
@@ -951,11 +962,27 @@ Panel {
           NavigationButton {
             bordered: true
             navRow: 13; navColumn: 1
-            text: "Save Current Setup"
+            text: "Save"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-            onClicked: { root.profileEditing = !root.profileEditing; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
+            onClicked: { root.profileEditing = !root.profileEditing; root.deleteProfileId = ""; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
+          }
+          NavigationButton {
+            bordered: true
+            navRow: 13; navColumn: 2
+            text: "Delete"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !root.restoreBusy && !!root.selectedProfile
+            onClicked: {
+              root.deleteProfileId = root.selectedProfile
+              root.deleteProfileLabel = root.selectedProfile
+              for (var i = 0; i < root.profiles.length; i++)
+                if (root.profiles[i].value === root.selectedProfile) root.deleteProfileLabel = root.profiles[i].label
+              root.profileEditing = false
+              Qt.callLater(function() { root.reveal(deleteConfirmation) })
+            }
           }
         }
         Column {
@@ -1022,14 +1049,75 @@ Panel {
             }
           }
         }
+        Column {
+          id: deleteConfirmation
+          width: parent.width
+          spacing: Style.spacing.xs
+          visible: root.deleteProfileId !== ""
+          Text {
+            width: parent.width
+            text: "Delete “" + root.deleteProfileLabel + "”? Current display settings stay unchanged."
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+          Row {
+            spacing: Style.spacing.xs
+            NavigationButton {
+              navRow: 17; navColumn: 0
+              text: "Confirm Delete"
+              bordered: true
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              onClicked: root.profileAction("delete", "", root.deleteProfileId)
+            }
+            NavigationButton {
+              navRow: 17; navColumn: 1
+              text: "Cancel"
+              bordered: true
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              onClicked: root.deleteProfileId = ""
+            }
+          }
+        }
+        Text {
+          id: manageFeedback
+          width: parent.width
+          text: root.manageMessage
+          visible: text !== ""
+          textFormat: Text.PlainText
+          wrapMode: Text.Wrap
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+        }
         PanelSeparator { foreground: root.bar.foreground }
         PanelSectionHeader { text: "Restore"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        SearchableDropdown {
+          id: profileDropdown
+          property int navRow: 18
+          property int navColumn: 0
+          width: parent.width
+          foreground: root.bar.foreground
+          placeholderText: "No saved setups"
+          options: root.profiles
+          value: root.selectedProfile
+          enabled: !root.restoreBusy && root.profiles.length > 0
+          hasCursor: root.cursorOn(profileDropdown)
+          function activate() { open() }
+          onHovered: function(inside) { if (inside) root.pointCursor(profileDropdown) }
+          onPopupOpenChanged: if (!popupOpen) keyCatcher.forceActiveFocus()
+          onChanged: function(v) { root.selectedProfile = v; root.previewText = ""; root.deleteProfileId = "" }
+        }
         Flow {
           width: parent.width
           spacing: Style.spacing.xs
           NavigationButton {
             bordered: true
-            navRow: 17; navColumn: 0
+            navRow: 19; navColumn: 0
             text: "Restore Setup"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1038,7 +1126,7 @@ Panel {
           }
           NavigationButton {
             bordered: true
-            navRow: 17; navColumn: 1
+            navRow: 19; navColumn: 1
             text: "Restore Omarchy Defaults"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1048,7 +1136,7 @@ Panel {
         }
         NavigationButton {
             bordered: true
-          navRow: 18
+          navRow: 20
           text: "Undo Last Restore"
           foreground: root.bar.foreground
           fontFamily: root.bar.fontFamily
@@ -1071,7 +1159,7 @@ Panel {
           spacing: Style.spacing.xs
           NavigationButton {
             bordered: true
-            navRow: 19; navColumn: 0
+            navRow: 21; navColumn: 0
             text: "Apply and Test"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1080,7 +1168,7 @@ Panel {
           }
           NavigationButton {
             bordered: true
-            navRow: 19; navColumn: 1
+            navRow: 21; navColumn: 1
             text: "Cancel"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1104,7 +1192,7 @@ Panel {
           spacing: Style.spacing.xs
           NavigationButton {
             bordered: true
-            navRow: 20; navColumn: 0
+            navRow: 22; navColumn: 0
             text: "Keep Changes"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1113,7 +1201,7 @@ Panel {
           }
           NavigationButton {
             bordered: true
-            navRow: 20; navColumn: 1
+            navRow: 22; navColumn: 1
             text: "Revert Now"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily

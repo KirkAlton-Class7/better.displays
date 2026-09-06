@@ -247,3 +247,54 @@ regressions pass. Qt slider tests now cover five input behaviors (seven passes
 including setup/cleanup), including click-to-enable wheel and leave-to-scroll.
 The real-machine restore preview passes; restoration itself is intentionally
 not triggered as part of installing the button.
+
+
+## Scale controls and complete-result verification (1.3.1)
+
+Scale is exact: both resolution dimensions divided by scale must produce whole
+logical pixels. At 1920×1080 every preset (1, 1.25, 1.5, 1.6, 2, 3, 4) is usable.
+At 2560×1440, 1.5 and 3 are incompatible and disabled; 1.25 and 1.6 are valid.
+Changing resolution can change the enabled choices. No global Hyprland scale
+checks are bypassed and unsupported values are never silently rounded.
+
+For a nonoverlapping horizontal row, preserve its leftmost origin, screen order,
+gaps and y offsets, shifting later screens to accommodate changed logical widths.
+For a vertical column, preserve its top origin, gaps and x offsets instead. This
+applies to scale, resolution and orientation. Explicit Position commands do not
+reflow other screens. More complex layouts retain their explicit coordinates and
+refuse new overlaps; use Position or a prepared profile to resolve those cases.
+All affected declarations are edited in one atomic configuration write and backup.
+
+The monitor helper rereads state under its shared lock and refuses a pending
+profile restore. It honors literal configured resolutions even if the driver is
+currently showing a fallback. It verifies every connected monitor's identity,
+resolution, refresh, scale, position and orientation, not just the clicked field.
+After a bounded settling period a fallback resolution gets one targeted output
+reinitialization, then another check. Persistent failure restores the previous
+file and checks recovery; concurrent edits are preserved with a backup path.
+A targeted reinitialization briefly disconnects that display and can move windows
+through normal compositor hotplug behavior. Direct settings do not have the profile
+restore's timed visual confirmation; use profiles for a saved, guarded setup.
+Errors automatically scroll into view in the widget.
+
+Terminal sizes accept 6–40 points, including decimals. Kitty now writes `10.5`,
+not `10.5.0`. Missing explicit font settings are shown as unavailable and setters
+refuse them. Corrupt persistence JSON is rejected before editing a terminal file.
+Set-all preflights every terminal; the persistence temp file is created beside its
+destination. Terminal reload uses the existing Omarchy command; Foot uses the new
+size for new terminals. Decimal/cache/failure tests use isolated temporary homes
+and mocked reload/signal commands, never the user's terminals.
+
+Run all backend regression suites with:
+
+```bash
+for test_file in tests/test-*.py; do python3 "$test_file" || exit; done
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml -o -,txt
+```
+
+Coverage: 21 profile tests, 11 monitor tests, 6 naming tests, 5 default-plan tests,
+and 3 terminal tests. The Qt suite covers five brightness input behaviors (seven
+passes with lifecycle cases). A ThinkPad three-screen live test applied laptop
+1.25×, 1.5× and 3×, returned to 2×, verified the right Dell remained 2560×1440 at
+1.6×, then restored the exact starting monitor file. Other resolutions/hardware
+combinations still depend on the monitor, dock and compositor accepting the mode.

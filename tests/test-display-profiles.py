@@ -42,6 +42,26 @@ class ProfileTests(unittest.TestCase):
 
     def profile(self): return p.capture('Working')
 
+    def test_delete_requires_confirmation_and_preserves_recovery_copy(self):
+        key = p.save_profile('Working')
+        path = p.PROFILES / (key + '.json')
+        before = path.read_bytes()
+        config = self.config.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'confirm'): p.delete_profile(key)
+        self.assertEqual(path.read_bytes(), before)
+        result = p.delete_profile(key, confirmed=True)
+        self.assertFalse(path.exists())
+        self.assertEqual(result['preferred'], '')
+        self.assertEqual((p.STATE / 'deleted-profiles' / path.name).read_bytes(), before)
+        self.assertEqual(self.config.read_bytes(), config)
+
+    def test_delete_nonpreferred_preserves_preference(self):
+        first = p.save_profile('First')
+        second = p.save_profile('Second')
+        self.assertEqual(p.delete_profile(second, confirmed=True)['preferred'], first)
+        self.assertTrue((p.PROFILES / (first + '.json')).exists())
+        with self.assertRaises(ValueError): p.delete_profile('../outside', confirmed=True)
+
     def test_save_never_overwrites_and_rejects_duplicate_name(self):
         key = p.save_profile('Working')
         original = (p.PROFILES / (key + '.json')).read_bytes()
