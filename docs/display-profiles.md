@@ -196,6 +196,7 @@ python3 tests/test-display-profiles.py -v
 python3 tests/test-restore-defaults.py -v
 python3 tests/test-monitor-settings.py -v
 python3 tests/test-display-names.py -v
+python3 tests/test-terminal-settings.py -v
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml -o -,txt
 ```
 
@@ -208,12 +209,12 @@ Undo preview/apply and explicit Revert passed. Broad dock/hotplug and optional D
 profile restoration still need hardware acceptance before the PR leaves draft.
 
 
-The Profiles and Restore action buttons use shared bordered controls and spacing.
-The preferred toggle has a stable width so its shorter active label does not move
-Save Current Setup. The restore actions can wrap on narrow panels; Undo stays
-underneath. Button labels have no trailing ellipses. CLI `prefer --id ID` remains
-idempotent; `toggle-preferred --id ID` performs the widget's atomic toggle under
-the shared lock.
+Manage Profiles and Restore Profile use shared bordered controls and spacing.
+Make Preferred retains its label in both states; active styling indicates the
+selected preference. Make Preferred / Delete share a row and Save Current Setup
+sits below. Restore actions wrap on narrow panels; Undo stays underneath.
+CLI `prefer --id ID` remains idempotent; `toggle-preferred --id ID` performs the
+widget's atomic toggle under the shared lock.
 
 
 Profile/action notifications expire after six seconds and clear when the panel
