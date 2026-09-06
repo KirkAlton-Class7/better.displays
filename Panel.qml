@@ -453,7 +453,7 @@ Panel {
           font.pixelSize: Style.font.body
           wrapMode: Text.Wrap
         }
-        PanelSlider {
+        ClickSlider {
           id: brightnessSlider
           width: parent.width
           bar: root.bar

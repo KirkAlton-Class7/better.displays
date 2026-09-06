@@ -129,3 +129,24 @@ Additional tests: `python3 tests/test-display-names.py -v`. These cover connecto
 renumbering, same-model displays, internal machine scoping, ambiguous/missing
 serials, name validation, reconnect/reset, stale save rejection and corrupted
 file preservation. Physical cable hotplug remains a separate acceptance check.
+
+## Brightness input and panel scrolling
+
+Brightness changes require a left click or drag on the slider. Mouse-wheel and
+touchpad scroll gestures over it pass through to the containing scroll view;
+hovering or prior interaction does not enable wheel adjustment. Canceled drags
+reset their preview without committing brightness. This prevents vertical panel
+navigation from unexpectedly changing the display.
+
+`ClickSlider.qml` retains the Omarchy slider appearance with plugin-local input
+in `ClickSliderInput.qml`. The original packaged slider is untouched. These files
+are adapted from Omarchy's MIT-licensed PanelSlider; attribution/license is in
+`licenses/omarchy-license.txt`. The Qt event tests run without the Quickshell
+runtime by exercising that same input component inside a real ScrollView:
+
+```bash
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml -o -,txt
+```
+
+The `tst_*.qml` filename is required for Qt test discovery. Tests cover hover,
+wheel propagation and intentional click/drag commits.
