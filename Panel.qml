@@ -18,8 +18,8 @@ Panel {
   property int pendingBrightness: -1
   property bool brightnessAvailable: false
   property string brightnessMessage: "Select a monitor"
-  property string actionError: ""
-  property string namesError: ""
+  readonly property string actionError: actionNotice.text
+  readonly property string namesError: namesNotice.text
   property string namesReadError: ""
   property bool nameEditing: false
   property bool profileEditing: false
@@ -50,7 +50,7 @@ Panel {
       if (root.saveTerminals) command.push("--terminals")
     }
     if (action === "preview") { root.previewKind = kind; root.previewId = id; root.previewText = "" }
-    root.defaultsMessage = ""
+    restoreNotice.show("")
     defaultsProc.command = command
     defaultsProc.running = true
   }
@@ -145,7 +145,7 @@ Panel {
     nameAction.command = ["python3", root.scriptDir + "/display-names.py", reset ? "reset" : "save",
                           "--output", m.name, "--identity", m.displayIdentity]
     if (!reset) nameAction.command = nameAction.command.concat(["--label", nameField.text])
-    root.namesError = ""
+    namesNotice.show("")
     nameAction.running = true
   }
 
@@ -262,14 +262,14 @@ Panel {
   function setMonitor(flag, val) {
     var m = root.selectedMonitor()
     if (!m || actionProc.running || root.restoreBusy) return
-    root.actionError = ""
+    actionNotice.show("")
     actionProc.command = [root.scriptDir + "/omarchy-display-monitor", "set", m.name, flag, String(val)]
     if (!actionProc.running) actionProc.running = true
   }
 
   function setTerminal(term, size) {
     if (actionProc.running || root.restoreBusy) return
-    root.actionError = ""
+    actionNotice.show("")
     actionProc.command = [root.scriptDir + "/omarchy-display-terminal", "set", term, String(size)]
     if (!actionProc.running) actionProc.running = true
   }
@@ -332,6 +332,10 @@ Panel {
   }
 
   onOpenedChanged: {
+    manageNotice.clear()
+    actionNotice.clear()
+    namesNotice.clear()
+    restoreNotice.reset()
     if (opened) {
       cursorActive = false
       // Use the panel's bar screen, not keyboard focus on another monitor.
@@ -355,8 +359,13 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  property string defaultsMessage: ""
-  property string manageMessage: ""
+  readonly property string defaultsMessage: restoreNotice.text
+  readonly property string manageMessage: manageNotice.text
+  TransientMessage { id: manageNotice }
+  TransientMessage { id: actionNotice }
+  TransientMessage { id: namesNotice }
+  RestoreFeedback { id: restoreNotice }
+  property string lastProfileErrors: ""
   property string deleteProfileId: ""
   property string deleteProfileLabel: ""
   Timer {
@@ -382,9 +391,12 @@ Panel {
             root.managedProfile = root.profiles.some(function(p) { return p.value === root.preferredProfile }) ? root.preferredProfile : (root.profiles.length ? root.profiles[0].value : "")
           if (root.deleteProfileId && !root.profiles.some(function(p) { return p.value === root.deleteProfileId })) root.deleteProfileId = ""
           if (root.previewKind === "profile" && root.previewText && !root.profiles.some(function(p) { return p.value === root.previewId })) root.previewText = ""
+          restoreNotice.observe(result.pending, root.opened, false)
           root.restoreState = result.pending
           root.canUndo = result.undo
-          if (result.errors.length) root.defaultsMessage = result.errors.join("\n")
+          var errors = result.errors.join("\n")
+          if (root.opened && errors && errors !== root.lastProfileErrors) restoreNotice.show(errors)
+          root.lastProfileErrors = errors
         } catch (e) { /* Keep last known state during a partial/failed read. */ }
       }
     }
@@ -397,9 +409,9 @@ Panel {
     onExited: function(code, status) {
       if (code !== 0 || status !== 0) {
         if (["save", "delete", "prefer", "toggle-preferred"].indexOf(action) >= 0) {
-          root.manageMessage = String(defaultsError.text).trim()
+          manageNotice.show(String(defaultsError.text).trim())
           Qt.callLater(function() { root.reveal(manageFeedback) })
-        } else root.defaultsMessage = String(defaultsError.text).trim()
+        } else restoreNotice.show(String(defaultsError.text).trim())
       }
       else {
         try {
@@ -409,11 +421,11 @@ Panel {
             root.managedProfile = result.id
             root.profileEditing = false
             keyCatcher.forceActiveFocus()
-            root.manageMessage = result.message
+            manageNotice.show(result.message)
             Qt.callLater(function() { root.reveal(manageFeedback) })
           } else if (action === "prefer" || action === "toggle-preferred" || action === "delete") {
             root.preferredProfile = result.preferred
-            root.manageMessage = result.message
+            manageNotice.show(result.message)
             if (action === "delete") {
               if (root.previewKind === "profile" && root.previewId === root.deleteProfileId) root.previewText = ""
               root.deleteProfileId = ""
@@ -421,12 +433,13 @@ Panel {
             Qt.callLater(function() { root.reveal(manageFeedback) })
           }
           else {
+            restoreNotice.observe(result, root.opened, true)
             root.restoreState = result
             root.previewText = ""
             root.nameEditing = false
             nameField.dirty = false
           }
-        } catch (e) { root.defaultsMessage = "Could not read restore result. Automatic recovery remains active." }
+        } catch (e) { restoreNotice.show("Could not read restore result. Automatic recovery remains active.") }
       }
       root.refresh()
     }
@@ -482,7 +495,7 @@ Panel {
     stdout: StdioCollector { waitForEnd: true }
     stderr: StdioCollector { id: nameStderr; waitForEnd: true }
     onExited: function(code, status) {
-      if (code !== 0 || status !== 0) root.namesError = String(nameStderr.text || "Could not save display name").trim()
+      if (code !== 0 || status !== 0) namesNotice.show(String(nameStderr.text || "Could not save display name").trim())
       else { root.nameEditing = false; nameField.dirty = false; keyCatcher.forceActiveFocus(); root.refresh() }
     }
   }
@@ -511,7 +524,7 @@ Panel {
     stderr: StdioCollector { id: actionStderr; waitForEnd: true }
     onExited: function(code, status) {
       if (code !== 0 || status !== 0) {
-        root.actionError = String(actionStderr.text || actionOutput.text || "Change failed").trim()
+        actionNotice.show(String(actionStderr.text || actionOutput.text || "Change failed").trim())
         Qt.callLater(function() { root.reveal(actionMessage) })
       }
       root.refresh()
@@ -1201,7 +1214,7 @@ Panel {
         }
         Text {
           width: parent.width
-          text: root.defaultsMessage || (root.restoreState.status === "waiting" ? "Keep this setup? Reverting in " + root.restoreState.remaining + " seconds." : root.restoreState.message || "")
+          text: root.restoreState.status === "waiting" ? "Keep this setup? Reverting in " + root.restoreState.remaining + " seconds." : root.defaultsMessage
           visible: text !== ""
           textFormat: Text.PlainText
           color: root.bar.foreground

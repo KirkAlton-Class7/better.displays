@@ -214,3 +214,13 @@ Save Current Setup. The restore actions can wrap on narrow panels; Undo stays
 underneath. Button labels have no trailing ellipses. CLI `prefer --id ID` remains
 idempotent; `toggle-preferred --id ID` performs the widget's atomic toggle under
 the shared lock.
+
+
+Profile/action notifications expire after six seconds and clear when the panel
+opens or closes. Repeating an action gives its result a fresh timeout. Restore
+history is not a notification: only a direct action result or completion of a
+restore observed as active in the open panel produces feedback. Polling does not
+revive dismissed completion messages or identical profile-read errors. The active
+Keep/Revert countdown and an unapplied restore preview remain visible while they
+require a decision. Six notification behavior tests cover expiry, repeated actions,
+historical suppression, one-time completion, closing and direct results.

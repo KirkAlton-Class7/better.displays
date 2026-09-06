@@ -193,3 +193,13 @@ fallback blocks scale/layout edits until a working resolution is selected.
 
 Verification: 47 Python tests and five Qt input behavior cases (seven Qt passes
 including setup/cleanup). See the runbooks for coverage and hardware limitations.
+
+
+Profile/action notifications expire after six seconds and clear when the panel
+opens or closes. Repeating an action gives its result a fresh timeout. Restore
+history is not a notification: only a direct action result or completion of a
+restore observed as active in the open panel produces feedback. Polling does not
+revive dismissed completion messages or identical profile-read errors. The active
+Keep/Revert countdown and an unapplied restore preview remain visible while they
+require a decision. Six notification behavior tests cover expiry, repeated actions,
+historical suppression, one-time completion, closing and direct results.
