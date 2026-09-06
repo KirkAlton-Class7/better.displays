@@ -99,7 +99,7 @@ def main():
     parser.add_argument('--identity')
     parser.add_argument('--label')
     args = parser.parse_args()
-    path = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'better-displays/display-names.json'
+    path = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'better_displays/display-names.json'
     machine_path = Path('/etc/machine-id')
     machine = machine_path.read_text().strip() if machine_path.exists() else ''
     monitors = json.loads(subprocess.check_output(['hyprctl', 'monitors', '-j'], text=True, timeout=10))

@@ -103,7 +103,7 @@ and relative-position buttons; hover over a selector for its current connector.
 Labels never become command arguments in place of actual output names.
 
 Names are saved with atomic writes and a writer lock to
-`${XDG_CONFIG_HOME:-~/.config}/better-displays/display-names.json`, outside the
+`${XDG_CONFIG_HOME:-~/.config}/better_displays/display-names.json`, outside the
 installed plugin and Git checkout. Back up this file with your user configuration.
 Disconnected displays retain their entries. The file schema is versioned, and a
 malformed file is not overwritten: the panel falls back to connector labels and
