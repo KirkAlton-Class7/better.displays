@@ -162,8 +162,8 @@ are in [the configuration runbook](docs/brightness-and-monitor-safety.md#click-f
 
 Use **Save Current Setup** in **Manage Profiles** to reveal profile naming and optional brightness/font
 inclusions. **Restore Setup** previews a saved configuration, then **Apply and
-Test** offers **Keep Changes / Revert Now**. **Make Preferred** chooses your normal
-restore profile. **Undo Last Restore** recovers the last kept restore when its
+Test** offers **Keep Changes / Revert Now**. **Make Preferred** chooses your preferred
+profile. **Undo Last Restore** recovers the last kept restore when its
 files and connected hardware have not changed. Profiles match hardware identities,
 survive plugin updates and never overwrite another saved setup.
 
@@ -179,7 +179,7 @@ reset flow described in historical enhancement notes.
 
 
 Manage Profiles contains **Make Preferred** and **Delete**, with **Save Current Setup** on its own row below. Manage Profiles has its own profile selector for preference and deletion. The
-separate Restore selector chooses only the setup to restore. Make Preferred remains a clearable, exclusive toggle. Delete asks for
+separate Restore Profile selector chooses only the setup to restore. Make Preferred remains a clearable, exclusive toggle. Delete asks for
 confirmation naming the selected profile and retains a private recovery copy.
 Save feedback and errors appear below Manage Profiles. Existing profile names
 report: “That profile name already exists. Save with a different name.”

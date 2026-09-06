@@ -1119,7 +1119,7 @@ Panel {
           font.pixelSize: Style.font.caption
         }
         PanelSeparator { foreground: root.bar.foreground }
-        PanelSectionHeader { text: "Restore"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        PanelSectionHeader { text: "Restore Profile"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
         SearchableDropdown {
           id: profileDropdown
           property int navRow: 19

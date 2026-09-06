@@ -155,7 +155,7 @@ def set_preferred(key, toggle=False):
     current = read_json(path, {}).get('id', '')
     selected = '' if toggle and current == key else key
     write_json(path, {'id': selected})
-    return dict(preferred=selected, message='Preferred restore profile updated.' if selected else 'No preferred restore profile selected.')
+    return dict(preferred=selected, message='Preferred profile updated.' if selected else 'No preferred profile selected.')
 
 
 def delete_profile(key, confirmed=False):
