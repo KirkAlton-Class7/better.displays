@@ -21,6 +21,84 @@ Panel {
   property string namesError: ""
   property string namesReadError: ""
 
+  // Match the stock Display panel: one panel cursor, explicit activation,
+  // native editor/dropdown key ownership, and shared theme control surfaces.
+  property int cursorRow: 0
+  property int cursorColumn: 0
+  property bool cursorActive: false
+
+  function controls() {
+    var result = []
+    function visit(item) {
+      if (item.navRow !== undefined && item.visible && item.enabled) result.push(item)
+      for (var i = 0; i < item.children.length; i++) visit(item.children[i])
+    }
+    visit(panelColumn)
+    return result.sort(function(a, b) { return a.navRow - b.navRow || a.navColumn - b.navColumn })
+  }
+
+  function cursorOn(item) {
+    return cursorActive && cursorRow === item.navRow && cursorColumn === item.navColumn
+  }
+
+  function pointCursor(item) {
+    if (nameField.activeFocus || resolutionDropdown.popupOpen || scrollArea.contentItem.moving) return
+    cursorRow = item.navRow
+    cursorColumn = item.navColumn
+    cursorActive = true
+  }
+
+  function reveal(item) {
+    var flick = scrollArea.contentItem
+    var y = item.mapToItem(flick.contentItem, 0, 0).y
+    if (y < flick.contentY) flick.contentY = Math.max(0, y - 6)
+    else if (y + item.height > flick.contentY + flick.height)
+      flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, y + item.height - flick.height + 6))
+  }
+
+  function moveCursor(dx, dy) {
+    var items = controls()
+    if (!items.length) return
+    var current = items.find(function(item) { return root.cursorOn(item) })
+    if (!current) current = items[0]
+    else if (dy) {
+      var rows = items.filter(function(item) { return dy > 0 ? item.navRow > current.navRow : item.navRow < current.navRow })
+      if (rows.length) {
+        var row = dy > 0 ? rows[0].navRow : rows[rows.length - 1].navRow
+        current = rows.find(function(item) { return item.navRow === row })
+      }
+    } else if (dx && current === brightnessRow) {
+      root.setBrightness(root.brightnessPercent + dx * 5)
+    } else if (dx) {
+      var siblings = items.filter(function(item) { return item.navRow === current.navRow })
+      current = siblings[Math.max(0, Math.min(siblings.length - 1, siblings.indexOf(current) + dx))]
+    }
+    cursorRow = current.navRow
+    cursorColumn = current.navColumn
+    cursorActive = true
+    reveal(current)
+  }
+
+  function activateCursor() {
+    var item = controls().find(function(item) { return root.cursorOn(item) })
+    if (item) item.activate()
+  }
+
+  component NavigationButton: Button {
+    id: control
+    required property int navRow
+    property int navColumn: 0
+    hasCursor: root.cursorOn(control)
+    onHovered: function(inside) { if (inside) root.pointCursor(control) }
+    onClicked: {
+      root.cursorRow = navRow
+      root.cursorColumn = navColumn
+      root.cursorActive = true
+      keyCatcher.forceActiveFocus()
+    }
+    function activate() { clicked() }
+  }
+
   function displayName(connector) {
     var m = root.monitorByName(connector)
     return m ? m.displayLabel : connector
@@ -40,6 +118,7 @@ Panel {
     var m = root.selectedMonitor()
     nameField.text = m ? m.displayAlias : ""
     nameField.identity = m ? m.displayIdentity : ""
+    nameField.dirty = false
   }
 
 
@@ -201,7 +280,7 @@ Panel {
     if (!installProc.running) installProc.running = true
   }
 
-  onOpenedChanged: if (opened) refresh()
+  onOpenedChanged: if (opened) { cursorActive = false; refresh() }
 
   Timer {
     interval: 4000
@@ -249,7 +328,7 @@ Panel {
             if (!root.selected && out.length) root.selected = out[0].name
           }
           var selected = root.selectedMonitor()
-          if (!nameField.activeFocus || nameField.identity !== (selected ? selected.displayIdentity : "")) root.loadNameField()
+          if (!nameField.dirty || nameField.identity !== (selected ? selected.displayIdentity : "")) root.loadNameField()
         } catch (e) { root.namesReadError = "Could not read display identities" }
       }
     }
@@ -261,7 +340,7 @@ Panel {
     stderr: StdioCollector { id: nameStderr; waitForEnd: true }
     onExited: function(code, status) {
       if (code !== 0 || status !== 0) root.namesError = String(nameStderr.text || "Could not save display name").trim()
-      else { nameField.focus = false; root.refresh() }
+      else { nameField.dirty = false; keyCatcher.forceActiveFocus(); root.refresh() }
     }
   }
 
@@ -338,13 +417,28 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
+    focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(440))
     contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(640))
+
+    PanelKeyCatcher {
+      id: keyCatcher
+      anchors.fill: parent
+      blocked: nameField.activeFocus || resolutionDropdown.popupOpen
+      onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
+      onActivateRequested: root.activateCursor()
+      onCloseRequested: root.close()
+      onTabRequested: function(direction) { root.switchPanel(direction) }
 
     ScrollView {
       id: scrollArea
       anchors.fill: parent
       clip: true
+      Binding {
+        target: scrollArea.contentItem
+        property: "interactive"
+        value: panelColumn.implicitHeight > scrollArea.height
+      }
       ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
       ScrollBar.vertical.policy: panelColumn.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
 
@@ -387,12 +481,13 @@ Panel {
           spacing: Style.spacing.xs
           Repeater {
             model: root.monitors
-            Button {
+            NavigationButton {
+              required property int index
+              navRow: 0
+              navColumn: index
               required property var modelData
               text: modelData.displayLabel
-              ToolTip.visible: hovered
-              ToolTip.text: modelData.name
-              ToolTip.delay: 400
+              tooltipText: modelData.name
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
               fontSize: Style.font.caption
@@ -407,6 +502,19 @@ Panel {
         TextField {
           id: nameField
           property string identity: ""
+          property bool dirty: false
+          property int navRow: 1
+          property int navColumn: 0
+          hasCursor: root.cursorOn(nameField)
+          onHoveredChanged: if (hovered) root.pointCursor(nameField)
+          onTextEdited: dirty = true
+          function activate() { forceActiveFocus() }
+          Keys.onEscapePressed: function(event) { keyCatcher.forceActiveFocus(); event.accepted = true }
+          Keys.onTabPressed: function(event) {
+            keyCatcher.forceActiveFocus()
+            root.cursorRow = 2; root.cursorColumn = 0; root.cursorActive = true
+            event.accepted = true
+          }
           width: parent.width
           foreground: root.bar.foreground
           placeholderText: "Name this display (up to 20 characters)"
@@ -416,14 +524,18 @@ Panel {
         }
         Row {
           spacing: Style.spacing.xs
-          Button {
+          NavigationButton {
+            navRow: 2
+            navColumn: 0
             text: "Save"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             enabled: nameField.enabled && nameField.text.trim().length > 0
             onClicked: root.editName(false)
           }
-          Button {
+          NavigationButton {
+            navRow: 2
+            navColumn: 1
             text: "Reset"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -453,9 +565,22 @@ Panel {
           font.pixelSize: Style.font.body
           wrapMode: Text.Wrap
         }
+        CursorSurface {
+          id: brightnessRow
+          property int navRow: 3
+          property int navColumn: 0
+          width: parent.width
+          implicitHeight: brightnessSlider.implicitHeight + Style.space(8)
+          visible: root.brightnessAvailable
+          enabled: brightnessSlider.enabled
+          foreground: root.bar.foreground
+          hasCursor: root.cursorOn(brightnessRow)
+          function activate() { /* Left/right adjusts this row, as in Display. */ }
+          HoverHandler { onHoveredChanged: if (hovered) root.pointCursor(brightnessRow) }
         ClickSlider {
           id: brightnessSlider
-          width: parent.width
+          anchors.fill: parent
+          anchors.margins: Style.space(4)
           bar: root.bar
           visible: root.brightnessAvailable
           enabled: !brightnessRead.running && !brightnessWrite.running
@@ -467,6 +592,7 @@ Panel {
           property string dragMonitor: ""
           onDraggingChanged: if (dragging) dragMonitor = root.selected
           onReleased: function(v) { if (dragMonitor === root.selected) root.setBrightness(v) }
+        }
         }
         Text {
           width: parent.width
@@ -486,6 +612,13 @@ Panel {
           spacing: Style.space(10)
           PanelSectionHeader { text: "RESOLUTION"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
           SearchableDropdown {
+            id: resolutionDropdown
+            property int navRow: 4
+            property int navColumn: 0
+            hasCursor: root.cursorOn(resolutionDropdown)
+            onHovered: function(inside) { if (inside) root.pointCursor(resolutionDropdown) }
+            onPopupOpenChanged: if (!popupOpen) keyCatcher.forceActiveFocus()
+            function activate() { open() }
             width: parent.width
             foreground: root.bar.foreground
             value: root.currentModeString(root.selectedMonitor())
@@ -499,7 +632,10 @@ Panel {
             spacing: Style.spacing.xs
             Repeater {
               model: root.scalePresets
-              Button {
+              NavigationButton {
+                required property int index
+                navRow: 5
+                navColumn: index
                 required property string modelData
                 text: modelData + "x"
                 foreground: root.bar.foreground
@@ -527,7 +663,8 @@ Panel {
           Flow {
             width: parent.width
             spacing: Style.spacing.xs
-            Button {
+            NavigationButton {
+              navRow: 6
               text: "Auto"
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
@@ -537,7 +674,10 @@ Panel {
             }
             Repeater {
               model: root.positionButtons()
-              Button {
+              NavigationButton {
+                required property int index
+                navRow: 6
+                navColumn: index + 1
                 required property var modelData
                 text: modelData.label
                 foreground: root.bar.foreground
@@ -559,7 +699,10 @@ Panel {
             spacing: Style.spacing.xs
             Repeater {
               model: root.transformPresets
-              Button {
+              NavigationButton {
+                required property int index
+                navRow: 7
+                navColumn: index
                 required property string modelData
                 text: ({ "0": "0°", "1": "90°", "2": "180°", "3": "270°" })[modelData]
                 foreground: root.bar.foreground
@@ -585,6 +728,8 @@ Panel {
           Repeater {
             model: root.terminals
             Row {
+              id: terminalRow
+              required property int index
               required property string modelData
               width: parent.width
               spacing: Style.spacing.sm
@@ -597,7 +742,9 @@ Panel {
                 elide: Text.ElideRight
                 anchors.verticalCenter: parent.verticalCenter
               }
-              Button {
+              NavigationButton {
+                navRow: 8 + terminalRow.index
+                navColumn: 0
                 text: "−"
                 foreground: root.bar.foreground
                 fontFamily: root.bar.fontFamily
@@ -614,7 +761,9 @@ Panel {
                 width: Style.space(34)
                 anchors.verticalCenter: parent.verticalCenter
               }
-              Button {
+              NavigationButton {
+                navRow: 8 + terminalRow.index
+                navColumn: 1
                 text: "+"
                 foreground: root.bar.foreground
                 fontFamily: root.bar.fontFamily
@@ -629,5 +778,6 @@ Panel {
         Item { width: parent.width; height: Style.space(4) }
       }
     }
+  }
   }
 }

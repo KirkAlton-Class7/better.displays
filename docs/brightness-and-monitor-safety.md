@@ -150,3 +150,41 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml -o -,t
 
 The `tst_*.qml` filename is required for Qt test discovery. Tests cover hover,
 wheel propagation and intentional click/drag commits.
+
+## Stock panel interaction conventions
+
+Better Displays uses the installed shell's `PanelKeyCatcher`, `Button`,
+`TextField`, `SearchableDropdown`, and `CursorSurface`. It keeps a panel cursor
+separate from the actual selected monitor, scale, and orientation. Hover updates
+that cursor; it never writes settings. Buttons activate by clicking or with
+Enter/Space. The selected setting retains the stock active appearance.
+
+Up/Down (or j/k) moves between control groups; Left/Right (or h/l) moves between
+buttons within a group, including wrapped monitor-position choices. The first
+navigation key establishes a cursor if none is active. Disabled and hidden
+controls are skipped. Navigation stops at the ends and scrolls the highlighted
+control into view. On brightness, Left/Right explicitly requests a five-point
+change, using the existing busy guard; wheel and touchpad scrolling never adjust
+brightness. Enter on that row does nothing. Click/drag still writes on release.
+
+Enter or a click starts editing a display name. Typing and arrow keys then belong
+to the field. Enter saves, Escape returns to panel navigation, and Tab leaves the
+field for Save. Unsaved text survives periodic refresh and losing input focus;
+switching monitors replaces the draft with that monitor's saved name. Save/Reset
+returns keyboard focus to the panel. The resolution popup owns its search and
+selection keys until it closes. Outside editors, Tab/Shift+Tab follows the stock
+panel-switching action and Escape closes the panel.
+
+Hover during active panel scrolling does not move the panel cursor, and hovering
+another control does not steal keys from an active editor or resolution search.
+Connector tooltips use the shared button's `tooltipText` API.
+
+Verification on Omarchy 4.0.2: QML parse, manifest validation, four automated
+slider interaction cases (plus test setup/cleanup), and live keyboard navigation
+through groups with automatic scrolling passed. Full physical input acceptance
+and monitor hotplug remain review items. No monitor settings were intentionally
+changed during the navigation check. For a manual check, hover scale/orientation
+choices without clicking and confirm the active value remains unchanged; scroll
+across brightness and confirm only panel content moves; enter a name, leave the
+field, wait over four seconds, then save; open resolution search, type and cancel
+without choosing a mode.
