@@ -224,3 +224,20 @@ revive dismissed completion messages or identical profile-read errors. The activ
 Keep/Revert countdown and an unapplied restore preview remain visible while they
 require a decision. Six notification behavior tests cover expiry, repeated actions,
 historical suppression, one-time completion, closing and direct results.
+
+
+### First-expansion scroll positioning (1.3.4)
+
+Opening Save Current Setup or Delete could jump upward on the first use: the
+previous callLater callback could run before Qt positioned the previously hidden
+editor/confirmation, so its reported y coordinate was still zero. A visible Qt
+ScrollView reproduction observed y=0 before layout and y=1000 after layout.
+ScrollReveal.js now finishes nested positioner layouts and ancestor layouts before
+calculating coordinates. It moves only enough to reveal the controls, preserves
+scroll position when already visible, and aligns an oversized editor's top so its
+first input remains reachable. The existing Save/Delete callbacks use this shared
+path, as do keyboard navigation and feedback reveals. No timer delay is guessed.
+
+Four regression cases cover first Save expansion, first Delete expansion, an
+oversized editor and an already-visible target. All 21 Qt cases pass including the
+existing slider/notification suites and lifecycle cases. Backend behavior is unchanged.

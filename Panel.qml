@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Ui
 import qs.Commons
+import "ScrollReveal.js" as ScrollReveal
 
 Panel {
   id: root
@@ -83,11 +84,7 @@ Panel {
   }
 
   function reveal(item) {
-    var flick = scrollArea.contentItem
-    var y = item.mapToItem(flick.contentItem, 0, 0).y
-    if (y < flick.contentY) flick.contentY = Math.max(0, y - 6)
-    else if (y + item.height > flick.contentY + flick.height)
-      flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, y + item.height - flick.height + 6))
+    ScrollReveal.reveal(scrollArea.contentItem, item)
   }
 
   function moveCursor(dx, dy) {
