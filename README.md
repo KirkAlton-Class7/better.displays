@@ -132,3 +132,27 @@ monitor-file updates with backups, validation and error rollback. It supersedes
 the original persistence behavior described above: monitor edits are now stored
 only in `monitors.lua`, preserving unrelated fields instead of replacing the
 whole declaration. See [behavior, tests, installation and rollback](docs/brightness-and-monitor-safety.md).
+
+
+### Monitor selection and Restore Defaults
+
+Each time Better Displays opens, it selects the monitor hosting that widget's bar.
+The matching monitor button uses the existing active styling and its saved name,
+if assigned. Keyboard focus on another screen does not affect this selection.
+You can select another monitor while the panel is open; periodic refresh keeps
+that choice. Reopening returns to the widget's own monitor. If that screen is
+unavailable, the monitor refresh falls back to the focused connected monitor,
+then the first available monitor.
+
+**Restore Defaults** restores all configured monitor declarations to Omarchy's
+installed policy: preferred resolution, automatic scale and position, and normal
+orientation. Existing terminal font sizes reset from installed Omarchy templates
+(currently 9pt); reopen terminals afterward. All saved display names are cleared,
+including disconnected monitors. Hardware brightness stays unchanged because
+Omarchy defines no default brightness percentage. Workspace bindings and unrelated
+configuration are preserved. These are installed defaults, not a snapshot of
+personal settings from first use.
+
+The action creates a recovery backup before writing and rolls back its own writes
+on detected failure. Full scope, preview commands, limitations and recovery steps
+are in [the configuration runbook](docs/brightness-and-monitor-safety.md#click-focused-brightness-and-restore-defaults-current-behavior).

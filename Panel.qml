@@ -290,7 +290,13 @@ Panel {
   }
 
   onOpenedChanged: {
-    if (opened) { cursorActive = false; refresh() }
+    if (opened) {
+      cursorActive = false
+      // Use the panel's bar screen, not keyboard focus on another monitor.
+      // Do this only on opening so polling preserves manual selections.
+      root.selected = panel.screen ? panel.screen.name : ""
+      refresh()
+    }
     else if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
   }
 
@@ -812,7 +818,7 @@ Panel {
         PanelSectionHeader { text: "Restore Defaults"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
         Text {
           width: parent.width
-          text: "Restore all configured monitors to preferred resolution, automatic scale/position and normal orientation. Reset terminal font sizes from Omarchy templates and clear all saved display names. Hardware brightness has no Omarchy default and stays unchanged. A recovery backup is saved first."
+          text: "Restore all configured display settings to Omarchy defaults. A recovery backup is created first."
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
