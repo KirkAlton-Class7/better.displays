@@ -962,15 +962,6 @@ Panel {
           NavigationButton {
             bordered: true
             navRow: 13; navColumn: 1
-            text: "Save"
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-            onClicked: { root.profileEditing = !root.profileEditing; root.deleteProfileId = ""; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
-          }
-          NavigationButton {
-            bordered: true
-            navRow: 13; navColumn: 2
             text: "Delete"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -985,6 +976,15 @@ Panel {
             }
           }
         }
+          NavigationButton {
+            bordered: true
+            navRow: 14; navColumn: 0
+            text: "Save Current Setup"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: { root.profileEditing = !root.profileEditing; root.deleteProfileId = ""; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
+          }
         Column {
           id: profileEditor
           width: parent.width
@@ -992,7 +992,7 @@ Panel {
           visible: root.profileEditing
           TextField {
             id: profileNameField
-            property int navRow: 14
+            property int navRow: 15
             property int navColumn: 0
             width: parent.width
             maximumLength: 40
@@ -1004,14 +1004,14 @@ Panel {
             function activate() { forceActiveFocus() }
             onAccepted: root.profileAction("save", "", "")
             Keys.onEscapePressed: { root.profileEditing = false; keyCatcher.forceActiveFocus() }
-            Keys.onTabPressed: { keyCatcher.forceActiveFocus(); root.cursorRow = 15; root.cursorColumn = 0; root.cursorActive = true }
+            Keys.onTabPressed: { keyCatcher.forceActiveFocus(); root.cursorRow = 16; root.cursorColumn = 0; root.cursorActive = true }
           }
           Flow {
             width: parent.width
             spacing: Style.spacing.xs
             NavigationButton {
             bordered: true
-              navRow: 15; navColumn: 0
+              navRow: 16; navColumn: 0
               text: root.saveBrightness ? "✓ Include brightness" : "Include brightness"
               active: root.saveBrightness
               foreground: root.bar.foreground
@@ -1020,7 +1020,7 @@ Panel {
             }
             NavigationButton {
             bordered: true
-              navRow: 15; navColumn: 1
+              navRow: 16; navColumn: 1
               text: root.saveTerminals ? "✓ Include terminal fonts" : "Include terminal fonts"
               active: root.saveTerminals
               foreground: root.bar.foreground
@@ -1032,7 +1032,7 @@ Panel {
             spacing: Style.spacing.xs
             NavigationButton {
             bordered: true
-              navRow: 16; navColumn: 0
+              navRow: 17; navColumn: 0
               text: "Save New Profile"
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
@@ -1041,7 +1041,7 @@ Panel {
             }
             NavigationButton {
             bordered: true
-              navRow: 16; navColumn: 1
+              navRow: 17; navColumn: 1
               text: "Cancel"
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
@@ -1066,7 +1066,7 @@ Panel {
           Row {
             spacing: Style.spacing.xs
             NavigationButton {
-              navRow: 17; navColumn: 0
+              navRow: 18; navColumn: 0
               text: "Confirm Delete"
               bordered: true
               foreground: root.bar.foreground
@@ -1074,7 +1074,7 @@ Panel {
               onClicked: root.profileAction("delete", "", root.deleteProfileId)
             }
             NavigationButton {
-              navRow: 17; navColumn: 1
+              navRow: 18; navColumn: 1
               text: "Cancel"
               bordered: true
               foreground: root.bar.foreground
@@ -1098,7 +1098,7 @@ Panel {
         PanelSectionHeader { text: "Restore"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
         SearchableDropdown {
           id: profileDropdown
-          property int navRow: 18
+          property int navRow: 19
           property int navColumn: 0
           width: parent.width
           foreground: root.bar.foreground
@@ -1117,7 +1117,7 @@ Panel {
           spacing: Style.spacing.xs
           NavigationButton {
             bordered: true
-            navRow: 19; navColumn: 0
+            navRow: 20; navColumn: 0
             text: "Restore Setup"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1126,7 +1126,7 @@ Panel {
           }
           NavigationButton {
             bordered: true
-            navRow: 19; navColumn: 1
+            navRow: 20; navColumn: 1
             text: "Restore Omarchy Defaults"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1136,7 +1136,7 @@ Panel {
         }
         NavigationButton {
             bordered: true
-          navRow: 20
+          navRow: 21
           text: "Undo Last Restore"
           foreground: root.bar.foreground
           fontFamily: root.bar.fontFamily
@@ -1159,7 +1159,7 @@ Panel {
           spacing: Style.spacing.xs
           NavigationButton {
             bordered: true
-            navRow: 21; navColumn: 0
+            navRow: 22; navColumn: 0
             text: "Apply and Test"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1168,7 +1168,7 @@ Panel {
           }
           NavigationButton {
             bordered: true
-            navRow: 21; navColumn: 1
+            navRow: 22; navColumn: 1
             text: "Cancel"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1192,7 +1192,7 @@ Panel {
           spacing: Style.spacing.xs
           NavigationButton {
             bordered: true
-            navRow: 22; navColumn: 0
+            navRow: 23; navColumn: 0
             text: "Keep Changes"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1201,7 +1201,7 @@ Panel {
           }
           NavigationButton {
             bordered: true
-            navRow: 22; navColumn: 1
+            navRow: 23; navColumn: 1
             text: "Revert Now"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily

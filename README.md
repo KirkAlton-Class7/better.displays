@@ -160,7 +160,7 @@ are in [the configuration runbook](docs/brightness-and-monitor-safety.md#click-f
 
 ### Named setups (version 1.3)
 
-Use **Save** in **Manage Profiles** to reveal profile naming and optional brightness/font
+Use **Save Current Setup** in **Manage Profiles** to reveal profile naming and optional brightness/font
 inclusions. **Restore Setup** previews a saved configuration, then **Apply and
 Test** offers **Keep Changes / Revert Now**. **Make Preferred** chooses your normal
 restore profile. **Undo Last Restore** recovers the last kept restore when its
@@ -178,7 +178,7 @@ timed rollback and driver fallback handling. This supersedes the older direct
 reset flow described in historical enhancement notes.
 
 
-Manage Profiles contains **Make Preferred**, **Save**, and **Delete**. The profile
+Manage Profiles contains **Make Preferred** and **Delete**, with **Save Current Setup** on its own row below. The profile
 selector lives in **Restore** and determines which profile preference/deletion
 acts on. Make Preferred remains a clearable, exclusive toggle. Delete asks for
 confirmation naming the selected profile and retains a private recovery copy.

@@ -12,7 +12,7 @@ only to the selected hardware identity and closes the editor. Cancel or Escape
 discards the draft; switching monitor or closing the panel also closes the editor.
 Naming is unavailable for displays without an unambiguous identity.
 
-**Manage Profiles** contains **Make Preferred**, **Save**, and **Delete**.
+**Manage Profiles** contains **Make Preferred** and **Delete**, with **Save Current Setup** on its own row below.
 The dropdown is in **Restore**, above Restore Setup and Restore Omarchy Defaults;
 Undo Last Restore remains underneath. Selection in that dropdown determines the
 profile managed by Make Preferred and Delete. The preferred button retains its
@@ -37,7 +37,7 @@ The controls offer:
 | --- | --- |
 | Profile selector | Choose a saved setup without changing hardware. |
 | Restore Setup | Preview the selected setup, then choose Apply and Test. |
-| Save | Reveal the setup name, optional inclusions and Save New Profile. |
+| Save Current Setup | Reveal the setup name, optional inclusions and Save New Profile. |
 | Make Preferred | Toggle the selected profile as preferred. Setting another replaces the old choice; clicking the active button clears it. Does not apply a setup. |
 | Undo Last Restore | Preview the exact backup of the last kept restore. |
 | Restore Omarchy Defaults | Preview a reset that explicitly warns custom fixes and aliases will be replaced. |

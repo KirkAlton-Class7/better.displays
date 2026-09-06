@@ -172,7 +172,7 @@ def delete_profile(key, confirmed=False):
         preferred = ''
         write_json(preferred_path, {'id': ''})
     path.unlink()
-    return dict(preferred=preferred, message='Profile deleted. A recovery copy was saved to ' + str(backup))
+    return dict(preferred=preferred, message='Profile deleted.')
 
 
 def edit_profile_monitor(text, connector, fields):
