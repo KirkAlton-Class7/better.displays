@@ -188,7 +188,8 @@ Scale buttons now disable exact scales incompatible with the current resolution.
 Rows and columns reflow when changing scale, resolution or orientation, preserving
 screen order, gaps and perpendicular offsets. Complex layouts refuse new overlap.
 Every edit checks all connected displays, including preserved resolutions, and
-retries a driver fallback once before reporting failure and recovering.
+reports driver fallback without disabling/reconnecting outputs. An existing
+fallback blocks scale/layout edits until a working resolution is selected.
 
-Verification: 46 Python tests and five Qt input behavior cases (seven Qt passes
+Verification: 47 Python tests and five Qt input behavior cases (seven Qt passes
 including setup/cleanup). See the runbooks for coverage and hardware limitations.

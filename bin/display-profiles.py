@@ -297,25 +297,8 @@ def check_expected(expected, actual):
 
 
 def verify_applied(expected):
-    for attempt in range(10):
-        try:
-            check_expected(expected, monitors())
-            return
-        except ValueError:
-            if attempt < 9: time.sleep(.2)
-    mapped = identity_map(monitors())
-    # A modeset can leave a connected output stuck on a fallback. Retry that
-    # output once. This uses normal compositor hotplug handling, no window or
-    # workspace dispatches. Never disable an unrelated or replaced device.
-    for connector, fields in expected.items():
-        actual = mapped.get(fields['identity'])
-        if not actual or actual['name'] != connector: continue
-        if any(abs(actual[k] - fields[k]) > (.2 if k == 'refreshRate' else .01) for k in ('width', 'height', 'refreshRate')):
-            if not re.fullmatch(r'[A-Za-z0-9_-]+', connector): raise ValueError('Cannot safely reinitialize output name')
-            s.run('hyprctl', 'dispatch', 'function() hl.monitor({ output = ' + json.dumps(connector) + ', disabled = true }) end')
-            time.sleep(.25)
-            s.run('hyprctl', 'reload')
-            config_errors()
+    # A failed modeset is handled by the existing transaction rollback. Never
+    # disable/reconnect an output as a side effect of checking its result.
     for attempt in range(10):
         try:
             check_expected(expected, monitors())

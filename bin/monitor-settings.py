@@ -125,10 +125,10 @@ def arrange(monitors, proposed, args):
 
 
 def verify_layout(expected, auto_output=None):
-    """Check preserved modes as well as edited fields, with one fallback retry."""
+    """Observe the complete result without disabling or reconnecting outputs."""
     def inspect():
         actual = {m['name']: m for m in json.loads(run('hyprctl', 'monitors', '-j'))}
-        errors, fallback = [], []
+        errors = []
         if set(actual) != {m['name'] for m in expected}:
             errors.append('Monitor connections changed during apply')
         for wanted in expected:
@@ -141,22 +141,12 @@ def verify_layout(expected, auto_output=None):
                 if wanted['name'] == auto_output and key in ('x', 'y'): continue
                 if abs(m.get(key, 0) - wanted.get(key, 0)) > (.2 if key == 'refreshRate' else .01):
                     errors.append('Hyprland did not apply requested ' + key + ': ' + wanted['name'])
-                    if key in ('width', 'height', 'refreshRate'): fallback.append(wanted['name'])
-        return errors, set(fallback)
-    for attempt in range(2):
-        for poll in range(10):
-            errors, fallback = inspect()
-            if not errors: return
-            time.sleep(.2)
-        if attempt or not fallback: break
-        # Some docks accept the scale but fall back to another resolution. Only
-        # reinitialize the same physical output once; never cycle other screens.
-        for output in sorted(fallback):
-            run('hyprctl', 'dispatch', 'function() hl.monitor({ output = ' + json.dumps(output) + ', disabled = true }) end')
-        time.sleep(.25)
-        run('hyprctl', 'reload')
-        errors = run('hyprctl', 'configerrors')
-        if errors and errors != 'ok': raise ValueError(errors)
+
+        return errors
+    for poll in range(10):
+        errors = inspect()
+        if not errors: return
+        if poll < 9: time.sleep(.2)
     raise ValueError('; '.join(errors))
 
 
@@ -209,6 +199,13 @@ def main():
                 mode_match = re.search(r'\bmode\s*=\s*"(\d+)x(\d+)@(\d+(?:\.\d+)?)"', line)
                 if mode_match:
                     m.update(width=int(mode_match[1]), height=int(mode_match[2]), refreshRate=float(mode_match[3]))
+        for actual, configured in zip(monitors, intended):
+            if args.mode and actual['name'] == args.output: continue
+            if any(abs(actual.get(k, 0) - configured.get(k, 0)) > (.2 if k == 'refreshRate' else .01)
+                   for k in ('width', 'height', 'refreshRate')):
+                raise ValueError(actual['name'] + ' is already running a fallback resolution ('
+                                 + str(actual['width']) + 'x' + str(actual['height'])
+                                 + '). Select a working resolution for that display before changing scale or layout. No settings changed.')
         wanted = next(m for m in intended if m['name'] == args.output)
         proposed, changes = proposal(wanted, args, intended, reflow=True)
         expected = arrange(intended, proposed, args)

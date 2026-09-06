@@ -205,19 +205,13 @@ class ProfileTests(unittest.TestCase):
         plan, _, _, _ = p.profile_plan(profile, self.items)
         self.assertIn('mode = "1920x1080@60"', plan[self.config])
 
-    def test_fallback_reinitializes_only_affected_output_once(self):
+    def test_fallback_verification_never_resets_outputs(self):
         profile = self.profile()
         _, _, expected, _ = p.profile_plan(profile, self.items)
         self.items[0]['width'] = 640
-        original_run = p.s.run.side_effect
-        def run(*args):
-            if args[:2] == ('hyprctl', 'dispatch'): self.items[0]['width'] = 1920
-            return original_run(*args)
-        p.s.run.side_effect = run
-        with patch.object(p.time, 'sleep'): p.verify_applied(expected)
-        calls = [c for c in self.calls if c[:2] == ('hyprctl', 'dispatch')]
-        self.assertEqual(len(calls), 1)
-        self.assertIn('output = "DP-1"', calls[0][2])
+        with patch.object(p.time, 'sleep'):
+            with self.assertRaisesRegex(ValueError, 'did not apply'): p.verify_applied(expected)
+        self.assertEqual(self.calls, [])
 
     def test_runtime_mode_fallback_fails_verification(self):
         profile = self.profile()

@@ -74,7 +74,7 @@ class MonitorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'whole logical pixels'):
                 m.proposal(a, argparse.Namespace(mode=None, scale=scale, pos=None, transform=None), [a], reflow=True)
 
-    def test_preserved_mode_fallback_reinitializes_only_affected_display(self):
+    def test_preserved_mode_fallback_never_resets_outputs(self):
         import json
         a = dict(name='A', width=1920, height=1080, refreshRate=60, scale=1.5, x=0, y=0, transform=0, serial='a')
         b = dict(a, name='B', width=2560, height=1440, serial='b', x=1280, scale=2)
@@ -86,10 +86,23 @@ class MonitorTests(unittest.TestCase):
             if args == ('hyprctl', 'reload'): actual[1] = b
             return ''
         with patch.object(m, 'run', side_effect=run), patch.object(m.time, 'sleep'):
-            m.verify_layout([a, b])
-        dispatches = [args for args in calls if 'dispatch' in args]
-        self.assertEqual(len(dispatches), 1)
-        self.assertIn('"B"', dispatches[0][-1])
+            with self.assertRaisesRegex(ValueError, 'did not apply'): m.verify_layout([a, b])
+        self.assertTrue(all(args == ('hyprctl', 'monitors', '-j') for args in calls))
+
+    def test_existing_fallback_blocks_scale_before_writes_or_reload(self):
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            target = home / '.config/hypr/monitors.lua'
+            target.parent.mkdir(parents=True)
+            original = 'hl.monitor({ output = "DP-1", mode = "2560x1440@59.95", scale = 1.6 })\n'
+            target.write_text(original)
+            current = dict(name='DP-1', width=2048, height=1280, refreshRate=59.99, scale=1.6, x=0, y=0, transform=0)
+            with patch.object(m.Path, 'home', return_value=home), patch.object(m, 'run', return_value=json.dumps([current])) as run, patch('sys.argv', ['monitor-settings.py', 'set', 'DP-1', '--scale', '2']):
+                with self.assertRaisesRegex(ValueError, 'already running a fallback'): m.main()
+                self.assertTrue(all(call.args == ('hyprctl', 'monitors', '-j') for call in run.call_args_list))
+            self.assertEqual(target.read_text(), original)
+            self.assertFalse((home / '.local/state/better-displays/backups').exists())
 
     def test_atomic_write_retains_mode(self):
         with tempfile.TemporaryDirectory() as directory:

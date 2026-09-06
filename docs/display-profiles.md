@@ -101,12 +101,11 @@ the panel remaining open. No additional persistent daemon or login service is
 installed; transient timers finish after handling their transaction.
 
 The helper writes configuration atomically, reloads Hyprland and checks actual
-mode, scale, position, orientation and identity. If an output remains on a fallback
-mode, it is reinitialized once and checked again. Only the affected, still-matching
-output is touched. This causes a brief disconnect/reconnect and normal compositor
-hotplug behavior, which can temporarily relocate windows. There are no explicit
-window-moving or workspace-changing commands in the profile helper. A persistent
-mismatch causes recovery rather than a misleading success message.
+mode, scale, position, orientation and identity. A persistent fallback causes
+transaction recovery after a bounded settling period. Verification never disables
+or reconnects an output: automatic resets can worsen a failed modeset on some
+Intel setups. Rollback restores configuration, but cannot guarantee recovery of a
+physical link the driver has lost. Incomplete recovery is reported with backups.
 
 After successful apply, the user gets a full 20 seconds to Keep Changes. Without
 confirmation the independent timer restores the prior files; Revert Now does the
@@ -202,7 +201,7 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml -o -,t
 
 The profile suite covers immutable saves, renamed/missing/ambiguous identities,
 new connector declarations, malformed input, overlap refusal, optional scope,
-canonical modes, fallback detection/reinitialization, timer failure before write,
+canonical modes, fallback detection without output resets, timer failure before write,
 rollback, concurrent edits, Keep, Undo and expired confirmation. On the development
 machine the real systemd timeout restored the previous setup; live apply/Keep,
 Undo preview/apply and explicit Revert passed. Broad dock/hotplug and optional DDC

@@ -266,15 +266,19 @@ refuse new overlaps; use Position or a prepared profile to resolve those cases.
 All affected declarations are edited in one atomic configuration write and backup.
 
 The monitor helper rereads state under its shared lock and refuses a pending
-profile restore. It honors literal configured resolutions even if the driver is
-currently showing a fallback. It verifies every connected monitor's identity,
-resolution, refresh, scale, position and orientation, not just the clicked field.
-After a bounded settling period a fallback resolution gets one targeted output
-reinitialization, then another check. Persistent failure restores the previous
-file and checks recovery; concurrent edits are preserved with a backup path.
-A targeted reinitialization briefly disconnects that display and can move windows
-through normal compositor hotplug behavior. Direct settings do not have the profile
-restore's timed visual confirmation; use profiles for a saved, guarded setup.
+profile restore. If runtime resolution differs from an explicit configured mode,
+scale/layout edits stop before any write or reload. Select a working resolution
+on that output first; an explicit mode change on that output is still allowed.
+This avoids silently retrying an already-failing mode while changing another
+setting. Verification checks every connected monitor's identity, resolution,
+refresh, scale, position and orientation over a bounded settling period.
+
+Neither direct edits nor profile verification disables/reconnects outputs. The
+previous one-shot reset aggravated disconnects on an Intel three-screen setup
+and was removed. Persistent failure restores the previous file and checks
+recovery; concurrent edits are preserved with a backup path. Configuration
+rollback cannot guarantee recovery from a driver-level physical link loss.
+Direct settings do not have profile restore's timed visual confirmation.
 Errors automatically scroll into view in the widget.
 
 Terminal sizes accept 6–40 points, including decimals. Kitty now writes `10.5`,
@@ -292,9 +296,27 @@ for test_file in tests/test-*.py; do python3 "$test_file" || exit; done
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml -o -,txt
 ```
 
-Coverage: 21 profile tests, 11 monitor tests, 6 naming tests, 5 default-plan tests,
+Coverage: 21 profile tests, 12 monitor tests, 6 naming tests, 5 default-plan tests,
 and 3 terminal tests. The Qt suite covers five brightness input behaviors (seven
 passes with lifecycle cases). A ThinkPad three-screen live test applied laptop
 1.25×, 1.5× and 3×, returned to 2×, verified the right Dell remained 2560×1440 at
 1.6×, then restored the exact starting monitor file. Other resolutions/hardware
 combinations still depend on the monitor, dock and compositor accepting the mode.
+
+
+### Intel disconnect investigation (1.3.2)
+
+On the affected ThinkPad, the compositor log records legacy DRM
+`drmModeSetCrtc failed: Invalid argument` for DP-1 at 2560×1440, followed by a
+2048×1280 fallback; later connector disconnect/reconnect events also appear.
+These establish a rejected hardware mode, not a proven cable/bandwidth cause.
+The existing UWSM `AQ_NO_ATOMIC=1` workaround forces legacy modesetting. Its local
+comment records earlier failures with atomic modesetting, so it was preserved.
+A controlled comparison requires a fresh compositor login; a shell restart is
+insufficient. Do not automatically log out the user or remove that workaround.
+See [Aquamarine environment documentation](https://github.com/hyprwm/aquamarine/blob/main/docs/env.md).
+
+The plugin mitigation removes forced resets and blocks ordinary scale changes
+when configuration and runtime mode already disagree. It does not claim to fix
+the underlying kernel/compositor/link issue. Tests assert no output-reset commands
+on fallback and no configuration write/reload for an existing mode mismatch.
