@@ -178,9 +178,8 @@ timed rollback and driver fallback handling. This supersedes the older direct
 reset flow described in historical enhancement notes.
 
 
-Manage Profiles contains **Make Preferred** and **Delete**, with **Save Current Setup** on its own row below. The profile
-selector lives in **Restore** and determines which profile preference/deletion
-acts on. Make Preferred remains a clearable, exclusive toggle. Delete asks for
+Manage Profiles contains **Make Preferred** and **Delete**, with **Save Current Setup** on its own row below. Manage Profiles has its own profile selector for preference and deletion. The
+separate Restore selector chooses only the setup to restore. Make Preferred remains a clearable, exclusive toggle. Delete asks for
 confirmation naming the selected profile and retains a private recovery copy.
 Save feedback and errors appear below Manage Profiles. Existing profile names
 report: “That profile name already exists. Save with a different name.”

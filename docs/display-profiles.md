@@ -13,11 +13,15 @@ discards the draft; switching monitor or closing the panel also closes the edito
 Naming is unavailable for displays without an unambiguous identity.
 
 **Manage Profiles** contains **Make Preferred** and **Delete**, with **Save Current Setup** on its own row below.
-The dropdown is in **Restore**, above Restore Setup and Restore Omarchy Defaults;
-Undo Last Restore remains underneath. Selection in that dropdown determines the
-profile managed by Make Preferred and Delete. The preferred button retains its
+Each section has an independent profile dropdown. The one in **Restore** sits
+above Restore Setup and Restore Omarchy Defaults;
+Undo Last Restore remains underneath. The Manage Profiles dropdown determines the profile managed by Make Preferred
+and Delete. Changing it does not change the Restore selection, and vice versa. The preferred button retains its
 label and highlights only for the one preferred selection; clicking again clears
-it. Saving creates and selects a new profile. Save feedback and errors appear
+it. Saving creates and selects a new profile in Manage Profiles only. Both selectors
+keep their own valid selection during refreshes. If their selected profile is
+deleted, each independently falls back to the preferred profile or first available
+profile; with none available it becomes empty. Save feedback and errors appear
 immediately below Manage Profiles, with automatic scrolling to the message.
 
 Delete expands an inline confirmation naming the selected profile. Cancel makes

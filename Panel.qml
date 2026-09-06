@@ -27,6 +27,7 @@ Panel {
   property bool saveTerminals: false
   property var profiles: []
   property string selectedProfile: ""
+  property string managedProfile: ""
   property string preferredProfile: ""
   property var restoreState: ({status: "idle", token: "", remaining: 0})
   property bool canUndo: false
@@ -75,7 +76,7 @@ Panel {
   }
 
   function pointCursor(item) {
-    if (nameField.activeFocus || profileNameField.activeFocus || profileDropdown.popupOpen || resolutionDropdown.popupOpen || scrollArea.contentItem.moving) return
+    if (nameField.activeFocus || profileNameField.activeFocus || profileDropdown.popupOpen || manageProfileDropdown.popupOpen || resolutionDropdown.popupOpen || scrollArea.contentItem.moving) return
     cursorRow = item.navRow
     cursorColumn = item.navColumn
     cursorActive = true
@@ -377,6 +378,10 @@ Panel {
           root.preferredProfile = result.preferred || ""
           if (!root.profiles.some(function(p) { return p.value === root.selectedProfile }))
             root.selectedProfile = root.profiles.some(function(p) { return p.value === root.preferredProfile }) ? root.preferredProfile : (root.profiles.length ? root.profiles[0].value : "")
+          if (!root.profiles.some(function(p) { return p.value === root.managedProfile }))
+            root.managedProfile = root.profiles.some(function(p) { return p.value === root.preferredProfile }) ? root.preferredProfile : (root.profiles.length ? root.profiles[0].value : "")
+          if (root.deleteProfileId && !root.profiles.some(function(p) { return p.value === root.deleteProfileId })) root.deleteProfileId = ""
+          if (root.previewKind === "profile" && root.previewText && !root.profiles.some(function(p) { return p.value === root.previewId })) root.previewText = ""
           root.restoreState = result.pending
           root.canUndo = result.undo
           if (result.errors.length) root.defaultsMessage = result.errors.join("\n")
@@ -401,7 +406,7 @@ Panel {
           var result = JSON.parse(defaultsOutput.text)
           if (action === "preview") { root.previewText = result.summary; Qt.callLater(function() { root.reveal(previewActions) }) }
           else if (action === "save") {
-            root.selectedProfile = result.id
+            root.managedProfile = result.id
             root.profileEditing = false
             keyCatcher.forceActiveFocus()
             root.manageMessage = result.message
@@ -409,7 +414,10 @@ Panel {
           } else if (action === "prefer" || action === "toggle-preferred" || action === "delete") {
             root.preferredProfile = result.preferred
             root.manageMessage = result.message
-            if (action === "delete") { root.deleteProfileId = ""; root.previewText = "" }
+            if (action === "delete") {
+              if (root.previewKind === "profile" && root.previewId === root.deleteProfileId) root.previewText = ""
+              root.deleteProfileId = ""
+            }
             Qt.callLater(function() { root.reveal(manageFeedback) })
           }
           else {
@@ -565,7 +573,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: nameField.activeFocus || profileNameField.activeFocus || profileDropdown.popupOpen || resolutionDropdown.popupOpen
+      blocked: nameField.activeFocus || profileNameField.activeFocus || profileDropdown.popupOpen || manageProfileDropdown.popupOpen || resolutionDropdown.popupOpen
       onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
       onActivateRequested: root.activateCursor()
       onCloseRequested: root.close()
@@ -945,6 +953,22 @@ Panel {
 
         PanelSeparator { foreground: root.bar.foreground }
         PanelSectionHeader { text: "Manage Profiles"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        SearchableDropdown {
+          id: manageProfileDropdown
+          property int navRow: 12
+          property int navColumn: 0
+          width: parent.width
+          foreground: root.bar.foreground
+          placeholderText: "No saved setups"
+          options: root.profiles
+          value: root.managedProfile
+          enabled: !root.restoreBusy && root.profiles.length > 0
+          hasCursor: root.cursorOn(manageProfileDropdown)
+          function activate() { open() }
+          onHovered: function(inside) { if (inside) root.pointCursor(manageProfileDropdown) }
+          onPopupOpenChanged: if (!popupOpen) keyCatcher.forceActiveFocus()
+          onChanged: function(v) { root.managedProfile = v; root.deleteProfileId = "" }
+        }
         Flow {
           width: parent.width
           spacing: Style.spacing.xs
@@ -955,9 +979,9 @@ Panel {
             text: "Make Preferred"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
-            active: !!root.selectedProfile && root.selectedProfile === root.preferredProfile
-            enabled: !root.restoreBusy && !!root.selectedProfile
-            onClicked: root.profileAction("toggle-preferred", "", root.selectedProfile)
+            active: !!root.managedProfile && root.managedProfile === root.preferredProfile
+            enabled: !root.restoreBusy && !!root.managedProfile
+            onClicked: root.profileAction("toggle-preferred", "", root.managedProfile)
           }
           NavigationButton {
             bordered: true
@@ -965,12 +989,12 @@ Panel {
             text: "Delete"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
-            enabled: !root.restoreBusy && !!root.selectedProfile
+            enabled: !root.restoreBusy && !!root.managedProfile
             onClicked: {
-              root.deleteProfileId = root.selectedProfile
-              root.deleteProfileLabel = root.selectedProfile
+              root.deleteProfileId = root.managedProfile
+              root.deleteProfileLabel = root.managedProfile
               for (var i = 0; i < root.profiles.length; i++)
-                if (root.profiles[i].value === root.selectedProfile) root.deleteProfileLabel = root.profiles[i].label
+                if (root.profiles[i].value === root.managedProfile) root.deleteProfileLabel = root.profiles[i].label
               root.profileEditing = false
               Qt.callLater(function() { root.reveal(deleteConfirmation) })
             }
@@ -983,7 +1007,7 @@ Panel {
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-            onClicked: { root.profileEditing = !root.profileEditing; root.deleteProfileId = ""; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
+            onClicked: { root.profileEditing = !root.profileEditing; root.deleteProfileId = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
           }
         Column {
           id: profileEditor
@@ -1110,7 +1134,7 @@ Panel {
           function activate() { open() }
           onHovered: function(inside) { if (inside) root.pointCursor(profileDropdown) }
           onPopupOpenChanged: if (!popupOpen) keyCatcher.forceActiveFocus()
-          onChanged: function(v) { root.selectedProfile = v; root.previewText = ""; root.deleteProfileId = "" }
+          onChanged: function(v) { root.selectedProfile = v; root.previewText = "" }
         }
         Flow {
           width: parent.width
