@@ -47,7 +47,7 @@ Panel {
   // directory of this Panel.qml.)
   readonly property string scriptDir: Qt.resolvedUrl(".").toString().replace("file://", "") + "/bin"
 
-  readonly property var scalePresets: ["1", "1.25", "1.6", "2", "3", "4"]
+  readonly property var scalePresets: ["1", "1.25", "1.5", "1.6", "2", "3", "4"]
   readonly property var transformPresets: ["0", "1", "2", "3"]
   readonly property var terminals: ["alacritty", "kitty", "ghostty", "foot"]
 
@@ -327,7 +327,7 @@ Panel {
             anchors.verticalCenter: parent.verticalCenter
           }
           Text {
-            text: "Displays"
+            text: "Better Displays"
             color: root.bar.foreground
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.title
@@ -433,6 +433,14 @@ Panel {
             }
           }
 
+          Text {
+            width: parent.width
+            text: "Scaling keeps screen positions. Adjust Position if gaps appear."
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+          }
           PanelSectionHeader { text: "POSITION"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
           Flow {
             width: parent.width
