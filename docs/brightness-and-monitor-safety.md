@@ -94,3 +94,38 @@ Keep brightness and safe monitor persistence independently reviewable. Include
 regression tests and a description of the behavior above. Do not attach private
 monitor/workspace configurations or workstation screenshots to upstream issues.
 Kirk's machine-specific deployment evidence belongs in the workstation repo.
+
+## Persistent display names
+
+Select a monitor, enter a name (up to 20 characters), and choose Save or press
+Enter. Reset removes its alias. Names appear in the selector, brightness heading,
+and relative-position buttons; hover over a selector for its current connector.
+Labels never become command arguments in place of actual output names.
+
+Names are saved with atomic writes and a writer lock to
+`${XDG_CONFIG_HOME:-~/.config}/better-displays/display-names.json`, outside the
+installed plugin and Git checkout. Back up this file with your user configuration.
+Disconnected displays retain their entries. The file schema is versioned, and a
+malformed file is not overwritten: the panel falls back to connector labels and
+shows an error until the file is repaired or restored. Duplicate names are refused,
+including names belonging to currently disconnected saved devices. To retire such
+an alias, back up the file and remove only that saved entry, or reconnect and Reset.
+
+External identity is a hash of manufacturer, model and non-placeholder serial.
+For a built-in panel without a serial, identity combines the machine ID with
+manufacturer and model; the raw machine ID is not stored. Renaming ports does not
+change either identity. A missing identity or duplicate identity among connected
+screens disables naming rather than guessing. Devices that lie about or reuse
+serials cannot be reliably distinguished; no connector fallback is persisted.
+After an OS reinstall changes machine ID, reassign the laptop alias. A dock or
+adapter that reports different identity data likewise requires reassignment.
+
+User labels do not change monitor rules, A/B/C groups, brightness, terminal
+settings or firmware. A name follows physical hardware, not its left/right
+position. New devices show connector names until named; no machine-specific
+aliases are shipped in this repository.
+
+Additional tests: `python3 tests/test-display-names.py -v`. These cover connector
+renumbering, same-model displays, internal machine scoping, ambiguous/missing
+serials, name validation, reconnect/reset, stale save rejection and corrupted
+file preservation. Physical cable hotplug remains a separate acceptance check.

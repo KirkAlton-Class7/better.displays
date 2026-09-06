@@ -18,6 +18,30 @@ Panel {
   property bool brightnessAvailable: false
   property string brightnessMessage: "Select a monitor"
   property string actionError: ""
+  property string namesError: ""
+  property string namesReadError: ""
+
+  function displayName(connector) {
+    var m = root.monitorByName(connector)
+    return m ? m.displayLabel : connector
+  }
+
+  function editName(reset) {
+    var m = root.selectedMonitor()
+    if (!m || !m.displayIdentity || nameAction.running) return
+    nameAction.command = ["python3", root.scriptDir + "/display-names.py", reset ? "reset" : "save",
+                          "--output", m.name, "--identity", m.displayIdentity]
+    if (!reset) nameAction.command = nameAction.command.concat(["--label", nameField.text])
+    root.namesError = ""
+    nameAction.running = true
+  }
+
+  function loadNameField() {
+    var m = root.selectedMonitor()
+    nameField.text = m ? m.displayAlias : ""
+    nameField.identity = m ? m.displayIdentity : ""
+  }
+
 
   function refreshBrightness() {
     if (!root.opened || !root.selected || brightnessRead.running || brightnessWrite.running || brightnessSlider.dragging) return
@@ -27,6 +51,7 @@ Panel {
   }
 
   onSelectedChanged: {
+    root.loadNameField()
     root.brightnessAvailable = false
     root.brightnessMessage = "Reading brightness…"
     root.refreshBrightness()
@@ -163,7 +188,7 @@ Panel {
       var o = root.monitors[i]
       if (o.name === root.selected) continue
       for (var d = 0; d < dirs.length; d++)
-        out.push({ label: dirs[d].glyph + " " + o.name, other: o.name, dir: dirs[d].dir })
+        out.push({ label: dirs[d].glyph + " " + o.displayLabel, other: o.name, dir: dirs[d].dir })
     }
     return out
   }
@@ -187,12 +212,14 @@ Panel {
 
   Process {
     id: monitorProc
-    command: ["bash", "-c", "hyprctl monitors -j"]
+    command: ["python3", root.scriptDir + "/display-names.py", "list"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         try {
-          var arr = JSON.parse(String(text || "[]"))
+          var result = JSON.parse(String(text || "{}"))
+          var arr = result.monitors || []
+          root.namesReadError = result.error || ""
           var out = []
           for (var i = 0; i < arr.length; i++) {
             var d = arr[i]
@@ -206,7 +233,8 @@ Panel {
             if (modeStrings.length === 0 && Array.isArray(d.availableModes))
               modeStrings = d.availableModes.slice()
             out.push({
-              name: d.name,
+              name: d.name, displayLabel: d.displayLabel, displayAlias: d.displayAlias,
+              displayIdentity: d.displayIdentity, namingReason: d.namingReason,
               width: d.width, height: d.height,
               x: d.x, y: d.y,
               scale: d.scale, transform: d.transform, refreshRate: d.refreshRate,
@@ -220,8 +248,20 @@ Panel {
             for (var k = 0; k < out.length; k++) if (out[k].focused) root.selected = out[k].name
             if (!root.selected && out.length) root.selected = out[0].name
           }
-        } catch (e) { /* ignore parse errors */ }
+          var selected = root.selectedMonitor()
+          if (!nameField.activeFocus || nameField.identity !== (selected ? selected.displayIdentity : "")) root.loadNameField()
+        } catch (e) { root.namesReadError = "Could not read display identities" }
       }
+    }
+  }
+
+  Process {
+    id: nameAction
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { id: nameStderr; waitForEnd: true }
+    onExited: function(code, status) {
+      if (code !== 0 || status !== 0) root.namesError = String(nameStderr.text || "Could not save display name").trim()
+      else { nameField.focus = false; root.refresh() }
     }
   }
 
@@ -264,7 +304,7 @@ Panel {
       var valid = code === 0 && status === 0 && /^[0-9]+$/.test(raw) && Number(raw) <= 100
       root.brightnessAvailable = valid
       if (valid) root.brightnessPercent = Number(raw)
-      root.brightnessMessage = valid ? "" : "Brightness unavailable for " + monitor
+      root.brightnessMessage = valid ? "" : "Brightness unavailable for " + root.displayName(monitor)
     }
   }
 
@@ -276,7 +316,7 @@ Panel {
     onExited: function(code, status) {
       if (monitor === root.selected && (code !== 0 || status !== 0)) {
         root.brightnessAvailable = false
-        root.brightnessMessage = "Could not change brightness on " + monitor
+        root.brightnessMessage = "Could not change brightness on " + root.displayName(monitor)
       } else root.refreshBrightness()
     }
   }
@@ -342,14 +382,17 @@ Panel {
         PanelSeparator { foreground: root.bar.foreground }
         PanelSectionHeader { text: "MONITOR"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
 
-        Row {
+        Flow {
           width: parent.width
           spacing: Style.spacing.xs
           Repeater {
             model: root.monitors
             Button {
               required property var modelData
-              text: modelData.name
+              text: modelData.displayLabel
+              ToolTip.visible: hovered
+              ToolTip.text: modelData.name
+              ToolTip.delay: 400
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
               fontSize: Style.font.caption
@@ -360,8 +403,47 @@ Panel {
           }
         }
 
+        PanelSectionHeader { text: "DISPLAY NAME"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        TextField {
+          id: nameField
+          property string identity: ""
+          width: parent.width
+          foreground: root.bar.foreground
+          placeholderText: "Name this display (up to 20 characters)"
+          maximumLength: 20
+          enabled: !!root.selectedMonitor() && !!root.selectedMonitor().displayIdentity && !nameAction.running
+          onAccepted: root.editName(false)
+        }
+        Row {
+          spacing: Style.spacing.xs
+          Button {
+            text: "Save"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: nameField.enabled && nameField.text.trim().length > 0
+            onClicked: root.editName(false)
+          }
+          Button {
+            text: "Reset"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: nameField.enabled
+            onClicked: root.editName(true)
+          }
+        }
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.namesError || root.namesReadError || (root.selectedMonitor() ? root.selectedMonitor().namingReason : "")
+          visible: text !== ""
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+        }
+
         PanelSeparator { foreground: root.bar.foreground }
-        PanelSectionHeader { text: "BRIGHTNESS — " + root.selected; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        PanelSectionHeader { text: "BRIGHTNESS — " + root.displayName(root.selected); foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
         Text {
           width: parent.width
           textFormat: Text.PlainText

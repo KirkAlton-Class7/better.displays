@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "better.displays",
   "name": "Better Displays",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "nightdevil00",
-  "description": "Per-monitor brightness, resolution, scale, position, transform and terminal font sizes",
+  "description": "Persistent display names, per-monitor brightness and safe display configuration",
   "kinds": [
     "bar-widget"
   ],
