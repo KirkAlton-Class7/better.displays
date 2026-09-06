@@ -21,6 +21,37 @@ Panel {
   property string actionError: ""
   property string namesError: ""
   property string namesReadError: ""
+  property bool nameEditing: false
+  property bool profileEditing: false
+  property bool saveBrightness: false
+  property bool saveTerminals: false
+  property var profiles: []
+  property string selectedProfile: ""
+  property string preferredProfile: ""
+  property var restoreState: ({status: "idle", token: "", remaining: 0})
+  property bool canUndo: false
+  property string previewKind: ""
+  property string previewId: ""
+  property string previewText: ""
+  readonly property bool restoreBusy: defaultsProc.running || restoreState.status === "applying" || restoreState.status === "waiting"
+
+  function profileAction(action, kind, id) {
+    if (defaultsProc.running) return
+    defaultsProc.action = action
+    var command = ["python3", root.scriptDir + "/display-profiles.py", action]
+    if (kind) command = command.concat(["--kind", kind])
+    if (id) command = command.concat(["--id", id])
+    if (action === "keep" || action === "revert") command = command.concat(["--token", root.restoreState.token])
+    if (action === "save") {
+      command = command.concat(["--name", profileNameField.text])
+      if (root.saveBrightness) command.push("--brightness")
+      if (root.saveTerminals) command.push("--terminals")
+    }
+    if (action === "preview") { root.previewKind = kind; root.previewId = id; root.previewText = "" }
+    root.defaultsMessage = ""
+    defaultsProc.command = command
+    defaultsProc.running = true
+  }
 
   // Match the stock Display panel: one panel cursor, explicit activation,
   // native editor/dropdown key ownership, and shared theme control surfaces.
@@ -43,7 +74,7 @@ Panel {
   }
 
   function pointCursor(item) {
-    if (nameField.activeFocus || resolutionDropdown.popupOpen || scrollArea.contentItem.moving) return
+    if (nameField.activeFocus || profileNameField.activeFocus || profileDropdown.popupOpen || resolutionDropdown.popupOpen || scrollArea.contentItem.moving) return
     cursorRow = item.navRow
     cursorColumn = item.navColumn
     cursorActive = true
@@ -89,6 +120,7 @@ Panel {
     id: control
     required property int navRow
     property int navColumn: 0
+    enabled: !root.restoreBusy
     hasCursor: root.cursorOn(control)
     onHovered: function(inside) { if (inside) root.pointCursor(control) }
     onClicked: {
@@ -107,7 +139,7 @@ Panel {
 
   function editName(reset) {
     var m = root.selectedMonitor()
-    if (!m || !m.displayIdentity || nameAction.running || defaultsProc.running) return
+    if (!m || !m.displayIdentity || nameAction.running || root.restoreBusy) return
     nameAction.command = ["python3", root.scriptDir + "/display-names.py", reset ? "reset" : "save",
                           "--output", m.name, "--identity", m.displayIdentity]
     if (!reset) nameAction.command = nameAction.command.concat(["--label", nameField.text])
@@ -132,6 +164,7 @@ Panel {
 
   onSelectedChanged: {
     root.pendingBrightness = -1
+    root.nameEditing = false
     if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
     root.loadNameField()
     root.brightnessAvailable = false
@@ -140,7 +173,7 @@ Panel {
   }
 
   function setBrightness(value) {
-    if (!root.brightnessAvailable || defaultsProc.running) return
+    if (!root.brightnessAvailable || root.restoreBusy) return
     root.pendingBrightness = Math.max(1, Math.min(100, Math.round(value)))
     root.brightnessPercent = root.pendingBrightness
     flushBrightness()
@@ -214,19 +247,20 @@ Panel {
   function refresh() {
     if (!monitorProc.running) monitorProc.running = true
     if (!termProc.running) termProc.running = true
+    if (!profileList.running) profileList.running = true
     root.refreshBrightness()
   }
 
   function setMonitor(flag, val) {
     var m = root.selectedMonitor()
-    if (!m || actionProc.running || defaultsProc.running) return
+    if (!m || actionProc.running || root.restoreBusy) return
     root.actionError = ""
     actionProc.command = [root.scriptDir + "/omarchy-display-monitor", "set", m.name, flag, String(val)]
     if (!actionProc.running) actionProc.running = true
   }
 
   function setTerminal(term, size) {
-    if (actionProc.running || defaultsProc.running) return
+    if (actionProc.running || root.restoreBusy) return
     root.actionError = ""
     actionProc.command = [root.scriptDir + "/omarchy-display-terminal", "set", term, String(size)]
     if (!actionProc.running) actionProc.running = true
@@ -297,7 +331,12 @@ Panel {
       root.selected = panel.screen ? panel.screen.name : ""
       refresh()
     }
-    else if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
+    else {
+      if (brightnessSlider.activeFocus) keyCatcher.forceActiveFocus()
+      root.nameEditing = false
+      root.profileEditing = false
+      root.previewText = ""
+    }
   }
 
   Timer {
@@ -308,14 +347,57 @@ Panel {
   }
 
   property string defaultsMessage: ""
+  Timer {
+    interval: 1000
+    running: root.opened
+    repeat: true
+    onTriggered: if (!profileList.running) profileList.running = true
+  }
+  Process {
+    id: profileList
+    command: ["python3", root.scriptDir + "/display-profiles.py", "list"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var result = JSON.parse(text)
+          // Avoid rebuilding dropdown delegates while the user types in it.
+          if (JSON.stringify(root.profiles) !== JSON.stringify(result.profiles)) root.profiles = result.profiles
+          root.preferredProfile = result.preferred || ""
+          if (!root.profiles.some(function(p) { return p.value === root.selectedProfile }))
+            root.selectedProfile = root.profiles.some(function(p) { return p.value === root.preferredProfile }) ? root.preferredProfile : (root.profiles.length ? root.profiles[0].value : "")
+          root.restoreState = result.pending
+          root.canUndo = result.undo
+          if (result.errors.length) root.defaultsMessage = result.errors.join("\n")
+        } catch (e) { /* Keep last known state during a partial/failed read. */ }
+      }
+    }
+  }
   Process {
     id: defaultsProc
-    command: ["python3", root.scriptDir + "/restore-defaults.py"]
+    property string action: ""
     stdout: StdioCollector { id: defaultsOutput; waitForEnd: true }
     stderr: StdioCollector { id: defaultsError; waitForEnd: true }
     onExited: function(code, status) {
-      root.defaultsMessage = String(code === 0 && status === 0 ? defaultsOutput.text : defaultsError.text).trim()
-      nameField.dirty = false
+      if (code !== 0 || status !== 0) root.defaultsMessage = String(defaultsError.text).trim()
+      else {
+        try {
+          var result = JSON.parse(defaultsOutput.text)
+          if (action === "preview") { root.previewText = result.summary; Qt.callLater(function() { root.reveal(previewActions) }) }
+          else if (action === "save") {
+            root.selectedProfile = result.id
+            root.profileEditing = false
+            keyCatcher.forceActiveFocus()
+            root.defaultsMessage = result.message
+          } else if (action === "prefer") root.defaultsMessage = result.message
+          else {
+            root.restoreState = result
+            root.previewText = ""
+            root.nameEditing = false
+            nameField.dirty = false
+          }
+        } catch (e) { root.defaultsMessage = "Could not read restore result. Automatic recovery remains active." }
+      }
       root.refresh()
     }
   }
@@ -371,7 +453,7 @@ Panel {
     stderr: StdioCollector { id: nameStderr; waitForEnd: true }
     onExited: function(code, status) {
       if (code !== 0 || status !== 0) root.namesError = String(nameStderr.text || "Could not save display name").trim()
-      else { nameField.dirty = false; keyCatcher.forceActiveFocus(); root.refresh() }
+      else { root.nameEditing = false; nameField.dirty = false; keyCatcher.forceActiveFocus(); root.refresh() }
     }
   }
 
@@ -458,7 +540,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: nameField.activeFocus || resolutionDropdown.popupOpen
+      blocked: nameField.activeFocus || profileNameField.activeFocus || profileDropdown.popupOpen || resolutionDropdown.popupOpen
       onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
       onActivateRequested: root.activateCursor()
       onCloseRequested: root.close()
@@ -533,8 +615,18 @@ Panel {
         }
 
         PanelSectionHeader { text: "DISPLAY NAME"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        NavigationButton {
+          navRow: 1
+          text: "Edit Display Name"
+          visible: !root.nameEditing
+          enabled: !root.restoreBusy && !!root.selectedMonitor() && !!root.selectedMonitor().displayIdentity
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          onClicked: { root.loadNameField(); root.nameEditing = true; Qt.callLater(function() { nameField.forceActiveFocus() }) }
+        }
         TextField {
           id: nameField
+          visible: root.nameEditing
           property string identity: ""
           property bool dirty: false
           property int navRow: 1
@@ -543,7 +635,7 @@ Panel {
           onHoveredChanged: if (hovered) root.pointCursor(nameField)
           onTextEdited: dirty = true
           function activate() { forceActiveFocus() }
-          Keys.onEscapePressed: function(event) { keyCatcher.forceActiveFocus(); event.accepted = true }
+          Keys.onEscapePressed: function(event) { root.nameEditing = false; root.loadNameField(); keyCatcher.forceActiveFocus(); event.accepted = true }
           Keys.onTabPressed: function(event) {
             keyCatcher.forceActiveFocus()
             root.cursorRow = 2; root.cursorColumn = 0; root.cursorActive = true
@@ -553,10 +645,11 @@ Panel {
           foreground: root.bar.foreground
           placeholderText: "Name this display (up to 20 characters)"
           maximumLength: 20
-          enabled: !!root.selectedMonitor() && !!root.selectedMonitor().displayIdentity && !nameAction.running
+          enabled: !!root.selectedMonitor() && !!root.selectedMonitor().displayIdentity && !nameAction.running && !root.restoreBusy
           onAccepted: root.editName(false)
         }
         Row {
+          visible: root.nameEditing
           spacing: Style.spacing.xs
           NavigationButton {
             navRow: 2
@@ -575,6 +668,14 @@ Panel {
             fontFamily: root.bar.fontFamily
             enabled: nameField.enabled
             onClicked: root.editName(true)
+          }
+          NavigationButton {
+            navRow: 2
+            navColumn: 2
+            text: "Cancel"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            onClicked: { root.nameEditing = false; root.loadNameField() }
           }
         }
         Text {
@@ -606,7 +707,7 @@ Panel {
           width: parent.width
           implicitHeight: brightnessSlider.implicitHeight + Style.space(8)
           visible: root.brightnessAvailable
-          enabled: !defaultsProc.running
+          enabled: !root.restoreBusy
           foreground: root.bar.foreground
           hasCursor: brightnessSlider.activeFocus || root.cursorOn(brightnessRow)
           function activate() { /* Left/right adjusts this row, as in Display. */ }
@@ -652,6 +753,7 @@ Panel {
           PanelSectionHeader { text: "RESOLUTION"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
           SearchableDropdown {
             id: resolutionDropdown
+            enabled: !root.restoreBusy && !actionProc.running
             property int navRow: 4
             property int navColumn: 0
             hasCursor: root.cursorOn(resolutionDropdown)
@@ -815,31 +917,189 @@ Panel {
         }
 
         PanelSeparator { foreground: root.bar.foreground }
-        PanelSectionHeader { text: "Restore Defaults"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
-        Text {
+        PanelSectionHeader { text: "Restore"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        SearchableDropdown {
+          id: profileDropdown
+          property int navRow: 12
+          property int navColumn: 0
           width: parent.width
-          text: "Restore all configured display settings to Omarchy defaults. A recovery backup is created first."
-          color: root.bar.foreground
-          font.family: root.bar.fontFamily
-          font.pixelSize: Style.font.caption
-          wrapMode: Text.Wrap
+          foreground: root.bar.foreground
+          placeholderText: "No saved setups"
+          options: root.profiles
+          value: root.selectedProfile
+          enabled: !root.restoreBusy && root.profiles.length > 0
+          hasCursor: root.cursorOn(profileDropdown)
+          function activate() { open() }
+          onHovered: function(inside) { if (inside) root.pointCursor(profileDropdown) }
+          onPopupOpenChanged: if (!popupOpen) keyCatcher.forceActiveFocus()
+          onChanged: function(v) { root.selectedProfile = v; root.previewText = "" }
+        }
+        Flow {
+          width: parent.width
+          spacing: Style.spacing.xs
+          NavigationButton {
+            navRow: 13; navColumn: 0
+            text: "Restore Setup…"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !root.restoreBusy && !!root.selectedProfile && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: root.profileAction("preview", "profile", root.selectedProfile)
+          }
+          NavigationButton {
+            navRow: 13; navColumn: 1
+            text: "Save Current Setup…"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: { root.profileEditing = !root.profileEditing; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
+          }
+          NavigationButton {
+            navRow: 13; navColumn: 2
+            text: "Undo Last Restore…"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: root.canUndo && !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: root.profileAction("preview", "undo", "")
+          }
         }
         NavigationButton {
-          navRow: 12
-          text: defaultsProc.running ? "Restoring…" : "Restore Defaults"
+          navRow: 13; navColumn: 3
+          text: root.selectedProfile === root.preferredProfile ? "Preferred Setup" : "Make Preferred"
           foreground: root.bar.foreground
           fontFamily: root.bar.fontFamily
-          enabled: !defaultsProc.running && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-          onClicked: { root.actionError = ""; defaultsProc.running = true }
+          active: root.selectedProfile === root.preferredProfile
+          enabled: !root.restoreBusy && !!root.selectedProfile && root.selectedProfile !== root.preferredProfile
+          onClicked: root.profileAction("prefer", "", root.selectedProfile)
+        }
+        Column {
+          id: profileEditor
+          width: parent.width
+          spacing: Style.spacing.xs
+          visible: root.profileEditing
+          TextField {
+            id: profileNameField
+            property int navRow: 14
+            property int navColumn: 0
+            width: parent.width
+            maximumLength: 40
+            placeholderText: "Setup name (up to 40 characters)"
+            foreground: root.bar.foreground
+            enabled: !root.restoreBusy
+            hasCursor: root.cursorOn(profileNameField)
+            onHoveredChanged: if (hovered) root.pointCursor(profileNameField)
+            function activate() { forceActiveFocus() }
+            onAccepted: root.profileAction("save", "", "")
+            Keys.onEscapePressed: { root.profileEditing = false; keyCatcher.forceActiveFocus() }
+            Keys.onTabPressed: { keyCatcher.forceActiveFocus(); root.cursorRow = 15; root.cursorColumn = 0; root.cursorActive = true }
+          }
+          Flow {
+            width: parent.width
+            spacing: Style.spacing.xs
+            NavigationButton {
+              navRow: 15; navColumn: 0
+              text: root.saveBrightness ? "✓ Include brightness" : "Include brightness"
+              active: root.saveBrightness
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              onClicked: root.saveBrightness = !root.saveBrightness
+            }
+            NavigationButton {
+              navRow: 15; navColumn: 1
+              text: root.saveTerminals ? "✓ Include terminal fonts" : "Include terminal fonts"
+              active: root.saveTerminals
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              onClicked: root.saveTerminals = !root.saveTerminals
+            }
+          }
+          Row {
+            spacing: Style.spacing.xs
+            NavigationButton {
+              navRow: 16; navColumn: 0
+              text: "Save New Profile"
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              enabled: !root.restoreBusy && profileNameField.text.trim().length > 0
+              onClicked: root.profileAction("save", "", "")
+            }
+            NavigationButton {
+              navRow: 16; navColumn: 1
+              text: "Cancel"
+              foreground: root.bar.foreground
+              fontFamily: root.bar.fontFamily
+              onClicked: root.profileEditing = false
+            }
+          }
+        }
+        NavigationButton {
+          navRow: 17
+          text: "Restore Omarchy Defaults…"
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+          enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+          onClicked: root.profileAction("preview", "defaults", "")
         }
         Text {
           width: parent.width
-          text: root.defaultsMessage
-          visible: text !== ""
+          text: root.previewText
+          visible: text !== "" && !root.restoreBusy
+          textFormat: Text.PlainText
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.caption
           wrapMode: Text.Wrap
+        }
+        Row {
+          id: previewActions
+          visible: root.previewText !== "" && !root.restoreBusy
+          spacing: Style.spacing.xs
+          NavigationButton {
+            navRow: 18; navColumn: 0
+            text: "Apply and Test"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: root.profileAction("start", root.previewKind, root.previewId)
+          }
+          NavigationButton {
+            navRow: 18; navColumn: 1
+            text: "Cancel"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            onClicked: root.previewText = ""
+          }
+        }
+        Text {
+          width: parent.width
+          text: root.defaultsMessage || (root.restoreState.status === "waiting" ? "Keep this setup? Reverting in " + root.restoreState.remaining + " seconds." : root.restoreState.message || "")
+          visible: text !== ""
+          textFormat: Text.PlainText
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+        }
+        Row {
+          id: confirmationRow
+          visible: root.restoreState.status === "waiting"
+          onVisibleChanged: if (visible) Qt.callLater(function() { root.reveal(confirmationRow) })
+          spacing: Style.spacing.xs
+          NavigationButton {
+            navRow: 19; navColumn: 0
+            text: "Keep Changes"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !defaultsProc.running && root.restoreState.remaining > 0
+            onClicked: root.profileAction("keep", "", "")
+          }
+          NavigationButton {
+            navRow: 19; navColumn: 1
+            text: "Revert Now"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !defaultsProc.running
+            onClicked: root.profileAction("revert", "", "")
+          }
         }
         Item { width: parent.width; height: Style.space(4) }
       }

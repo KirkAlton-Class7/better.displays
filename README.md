@@ -144,7 +144,7 @@ that choice. Reopening returns to the widget's own monitor. If that screen is
 unavailable, the monitor refresh falls back to the focused connected monitor,
 then the first available monitor.
 
-**Restore Defaults** restores all configured monitor declarations to Omarchy's
+**Restore Omarchy Defaults…**, under **Restore**, previews a reset of all configured monitor declarations to Omarchy's
 installed policy: preferred resolution, automatic scale and position, and normal
 orientation. Existing terminal font sizes reset from installed Omarchy templates
 (currently 9pt); reopen terminals afterward. All saved display names are cleared,
@@ -153,6 +153,26 @@ Omarchy defines no default brightness percentage. Workspace bindings and unrelat
 configuration are preserved. These are installed defaults, not a snapshot of
 personal settings from first use.
 
-The action creates a recovery backup before writing and rolls back its own writes
-on detected failure. Full scope, preview commands, limitations and recovery steps
+Apply and Test creates a recovery backup before writing. Keep Changes confirms the
+result; otherwise an independent timer reverts it after 20 seconds. Full scope, preview commands, limitations and recovery steps
 are in [the configuration runbook](docs/brightness-and-monitor-safety.md#click-focused-brightness-and-restore-defaults-current-behavior).
+
+
+### Named setups (version 1.3)
+
+Use **Save Current Setup…** to reveal profile naming and optional brightness/font
+inclusions. **Restore Setup…** previews a saved configuration, then **Apply and
+Test** offers **Keep Changes / Revert Now**. **Make Preferred** chooses your normal
+restore profile. **Undo Last Restore…** recovers the last kept restore when its
+files and connected hardware have not changed. Profiles match hardware identities,
+survive plugin updates and never overwrite another saved setup.
+
+**Edit Display Name** now reveals Save / Reset / Cancel only while editing.
+Editors and restore previews stay collapsed otherwise. Omarchy defaults remain an
+explicit secondary choice because generic preferred modes can replace custom
+hardware fixes. They never overwrite your saved profiles.
+
+See [named setup controls, storage, recovery, CLI and tests](docs/display-profiles.md)
+for the current restore behavior, including disconnected monitors, optional scope,
+timed rollback and driver fallback handling. This supersedes the older direct
+reset flow described in historical enhancement notes.

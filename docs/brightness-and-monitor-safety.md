@@ -1,3 +1,8 @@
+> Current restoration flow (v1.3): see [Named setups and guarded restoration](display-profiles.md).
+> All restores now use preview, Apply and Test, and independent 20-second Keep/Revert.
+> Monitor naming is opened explicitly with Edit Display Name. Historical descriptions
+> of an immediate defaults reset below are superseded by that flow.
+
 # Per-display brightness and configuration safety
 
 ## What changes
@@ -202,8 +207,8 @@ brightness values to the latest requested target and writes serially. This
 supersedes the earlier unconditional wheel blocking described above. A parent /
 child enabled-state dependency was removed to prevent disabling the slider.
 
-The **Restore Defaults** section contains a **Restore Defaults** button. Clicking
-it immediately applies the stated scope, after preflight and recovery backup:
+The **Restore Defaults** section contains a **Restore Defaults** button. It now previews the stated scope before Apply and Test, with a recovery backup and
+timed confirmation:
 
 - All literal monitor declarations in `~/.config/hypr/monitors.lua`: preferred
   mode, automatic scale and position, normal orientation. Unrelated fields,

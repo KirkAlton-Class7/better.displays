@@ -2,7 +2,6 @@
 """Restore panel-managed values from installed Omarchy defaults, with rollback."""
 import argparse
 from contextlib import ExitStack
-from datetime import datetime, timezone
 import fcntl
 import importlib.util
 import json
@@ -118,6 +117,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
+    if not args.dry_run:
+        # All user-facing defaults restores use the independent timed guard.
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).with_name('display-profiles.py')), 'start', '--kind', 'defaults'])
     config = Path.home() / '.config'
     names_config = Path(os.environ.get('XDG_CONFIG_HOME', str(config)))
     stock = Path('/usr/share/omarchy/config')
@@ -133,14 +135,8 @@ def main():
             content = plan.pop(config / 'better_displays/display-names.json')
             plan[names_config / 'better_displays/display-names.json'] = content
         subprocess.run(['luac', '-p', '-'], input=plan[config / 'hypr/monitors.lua'], text=True, check=True, capture_output=True, timeout=10)
-        if args.dry_run:
-            print(json.dumps({str(p): text for p, text in plan.items()}, indent=2))
-            return
-        errors = settings.run('hyprctl', 'configerrors')
-        if errors and errors != 'ok': raise ValueError('Resolve existing Hyprland config errors first: ' + errors)
-        backup = Path.home() / '.local/state/better-displays/defaults-backups' / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-        apply_plan(plan, backup)
-        print('Defaults restored; brightness unchanged. Reopen terminals to use default font sizes. Backup: ' + str(backup))
+        print(json.dumps({str(p): text for p, text in plan.items()}, indent=2))
+
 
 
 if __name__ == '__main__':
