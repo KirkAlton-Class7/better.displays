@@ -7,13 +7,40 @@ import qs.Commons
 
 Panel {
   id: root
-  moduleName: "mihai.displays"
-  ipcTarget: "mihai.displays"
+  moduleName: "better.displays"
+  ipcTarget: "better.displays"
   manageIpc: true
 
   property var monitors: []
   property string selected: ""
   property var terminalSizes: ({})
+  property int brightnessPercent: 0
+  property bool brightnessAvailable: false
+  property string brightnessMessage: "Select a monitor"
+  property string actionError: ""
+
+  function refreshBrightness() {
+    if (!root.opened || !root.selected || brightnessRead.running || brightnessWrite.running || brightnessSlider.dragging) return
+    brightnessRead.monitor = root.selected
+    brightnessRead.command = ["timeout", "12", "omarchy", "brightness", "display", "--monitor", brightnessRead.monitor]
+    brightnessRead.running = true
+  }
+
+  onSelectedChanged: {
+    root.brightnessAvailable = false
+    root.brightnessMessage = "Reading brightness…"
+    root.refreshBrightness()
+  }
+
+  function setBrightness(value) {
+    if (!root.brightnessAvailable || brightnessWrite.running || brightnessRead.running) return
+    brightnessWrite.monitor = root.selected
+    var percent = Math.max(1, Math.min(100, Math.round(value)))
+    brightnessWrite.command = ["timeout", "12", "omarchy", "brightness", "display", "--no-osd", "--monitor", brightnessWrite.monitor, percent + "%"]
+    root.brightnessMessage = "Applying…"
+    brightnessWrite.running = true
+  }
+
 
   // Absolute path to this plugin's bundled scripts, so the panel works on
   // install without relying on the shell's PATH. (Qt.resolvedUrl(".") is the
@@ -74,17 +101,21 @@ Panel {
   function refresh() {
     if (!monitorProc.running) monitorProc.running = true
     if (!termProc.running) termProc.running = true
+    root.refreshBrightness()
   }
 
   function setMonitor(flag, val) {
     var m = root.selectedMonitor()
-    if (!m) return
-    actionProc.command = ["bash", "-c", root.scriptDir + "/omarchy-display-monitor set " + root.shellEscape(m.name) + " " + root.shellEscape(flag) + " " + root.shellEscape(val)]
+    if (!m || actionProc.running) return
+    root.actionError = ""
+    actionProc.command = [root.scriptDir + "/omarchy-display-monitor", "set", m.name, flag, String(val)]
     if (!actionProc.running) actionProc.running = true
   }
 
   function setTerminal(term, size) {
-    actionProc.command = ["bash", "-c", root.scriptDir + "/omarchy-display-terminal set " + root.shellEscape(term) + " " + root.shellEscape(size)]
+    if (actionProc.running) return
+    root.actionError = ""
+    actionProc.command = [root.scriptDir + "/omarchy-display-terminal", "set", term, String(size)]
     if (!actionProc.running) actionProc.running = true
   }
 
@@ -98,8 +129,13 @@ Panel {
   }
 
   function posFor(selected, other, dir) {
-    var sw = selected.width, sh = selected.height
-    var ox = other.x, oy = other.y, ow = other.width, oh = other.height
+    var sr = Number(selected.transform) % 2 !== 0
+    var orot = Number(other.transform) % 2 !== 0
+    var sw = Math.round((sr ? selected.height : selected.width) / selected.scale)
+    var sh = Math.round((sr ? selected.width : selected.height) / selected.scale)
+    var ox = other.x, oy = other.y
+    var ow = Math.round((orot ? other.height : other.width) / other.scale)
+    var oh = Math.round((orot ? other.width : other.height) / other.scale)
     if (dir === "left") return (ox - sw) + "x" + oy
     if (dir === "right") return (ox + ow) + "x" + oy
     if (dir === "above") return ox + "x" + (oy - sh)
@@ -173,13 +209,14 @@ Panel {
               name: d.name,
               width: d.width, height: d.height,
               x: d.x, y: d.y,
-              scale: d.scale, transform: d.transform,
+              scale: d.scale, transform: d.transform, refreshRate: d.refreshRate,
               focused: !!d.focused,
               modes: modeStrings
             })
           }
           root.monitors = out
-          if (!root.selected) {
+          if (!out.some(function(m) { return m.name === root.selected })) {
+            root.selected = ""
             for (var k = 0; k < out.length; k++) if (out[k].focused) root.selected = out[k].name
             if (!root.selected && out.length) root.selected = out[0].name
           }
@@ -190,7 +227,7 @@ Panel {
 
   Process {
     id: termProc
-    command: ["bash", "-c", root.scriptDir + "/omarchy-display-terminal list --json"]
+    command: [root.scriptDir + "/omarchy-display-terminal", "list", "--json"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -202,14 +239,46 @@ Panel {
 
   Process {
     id: installProc
-    command: ["bash", "-c", root.scriptDir + "/../install --silent"]
+    command: [root.scriptDir + "/../install", "--silent"]
     stdout: StdioCollector { waitForEnd: true }
   }
 
   Process {
     id: actionProc
+    stdout: StdioCollector { id: actionOutput; waitForEnd: true }
+    stderr: StdioCollector { id: actionStderr; waitForEnd: true }
+    onExited: function(code, status) {
+      if (code !== 0 || status !== 0) root.actionError = String(actionStderr.text || actionOutput.text || "Change failed").trim()
+      root.refresh()
+    }
+  }
+
+  Process {
+    id: brightnessRead
+    property string monitor: ""
+    stdout: StdioCollector { id: brightnessOutput; waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(code, status) {
+      if (monitor !== root.selected) { root.refreshBrightness(); return }
+      var raw = String(brightnessOutput.text || "").trim()
+      var valid = code === 0 && status === 0 && /^[0-9]+$/.test(raw) && Number(raw) <= 100
+      root.brightnessAvailable = valid
+      if (valid) root.brightnessPercent = Number(raw)
+      root.brightnessMessage = valid ? "" : "Brightness unavailable for " + monitor
+    }
+  }
+
+  Process {
+    id: brightnessWrite
+    property string monitor: ""
     stdout: StdioCollector { waitForEnd: true }
-    onRunningChanged: if (!running) root.refresh()
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(code, status) {
+      if (monitor === root.selected && (code !== 0 || status !== 0)) {
+        root.brightnessAvailable = false
+        root.brightnessMessage = "Could not change brightness on " + monitor
+      } else root.refreshBrightness()
+    }
   }
 
   implicitWidth: button.implicitWidth
@@ -289,6 +358,43 @@ Panel {
               onClicked: root.selected = modelData.name
             }
           }
+        }
+
+        PanelSeparator { foreground: root.bar.foreground }
+        PanelSectionHeader { text: "BRIGHTNESS — " + root.selected; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        Text {
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.brightnessMessage || Math.round(brightnessSlider.dragging ? brightnessSlider.liveValue : root.brightnessPercent) + "%"
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.body
+          wrapMode: Text.Wrap
+        }
+        PanelSlider {
+          id: brightnessSlider
+          width: parent.width
+          bar: root.bar
+          visible: root.brightnessAvailable
+          enabled: !brightnessRead.running && !brightnessWrite.running
+          minimum: 1
+          maximum: 100
+          step: 1
+          integer: true
+          value: root.brightnessPercent
+          property string dragMonitor: ""
+          onDraggingChanged: if (dragging) dragMonitor = root.selected
+          onReleased: function(v) { if (dragMonitor === root.selected) root.setBrightness(v) }
+        }
+        Text {
+          width: parent.width
+          visible: root.actionError !== ""
+          text: root.actionError
+          textFormat: Text.PlainText
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.body
+          wrapMode: Text.Wrap
         }
 
         // ---------- Resolution / Scale / Position / Orientation ----------

@@ -123,3 +123,12 @@ that the font size is numeric (`^[0-9]+(\.[0-9]+)?$`).
 ## License
 
 MIT — do what you like, attribute if you're feeling generous.
+
+## Fork enhancements
+
+This fork adds brightness for the selected display using Omarchy's existing
+hardware backend, fixes logical display positioning, and adds conservative
+monitor-file updates with backups, validation and error rollback. It supersedes
+the original persistence behavior described above: monitor edits are now stored
+only in `monitors.lua`, preserving unrelated fields instead of replacing the
+whole declaration. See [behavior, tests, installation and rollback](docs/brightness-and-monitor-safety.md).
