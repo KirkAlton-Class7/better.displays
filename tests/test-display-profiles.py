@@ -49,6 +49,23 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual((p.PROFILES / (key + '.json')).read_bytes(), original)
         self.assertEqual(len(list(p.PROFILES.glob('*.json'))), 1)
 
+    def test_preferred_toggle_switches_exclusively_and_clears(self):
+        first = p.save_profile('First')
+        second = p.save_profile('Second')
+        self.assertEqual(p.set_preferred(first)['preferred'], first)
+        self.assertEqual(p.set_preferred(second, toggle=True)['preferred'], second)
+        self.assertEqual(p.read_json(p.PROFILES.parent / 'preferred-profile.json')['id'], second)
+        self.assertEqual(p.set_preferred(second, toggle=True)['preferred'], '')
+        self.assertEqual(p.set_preferred(first, toggle=True)['preferred'], first)
+        self.assertEqual(len(list(p.PROFILES.glob('*.json'))), 2)
+
+    def test_explicit_prefer_is_idempotent_and_invalid_profile_preserves_choice(self):
+        first = p.save_profile('First')
+        p.set_preferred(first)
+        self.assertEqual(p.set_preferred(first)['preferred'], first)
+        with self.assertRaises(ValueError): p.set_preferred('0' * 32, toggle=True)
+        self.assertEqual(p.read_json(p.PROFILES.parent / 'preferred-profile.json')['id'], first)
+
     def test_connector_renumbering_matches_identity(self):
         profile = self.profile()
         self.items[0]['name'] = 'DP-9'

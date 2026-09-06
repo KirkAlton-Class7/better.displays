@@ -12,16 +12,21 @@ only to the selected hardware identity and closes the editor. Cancel or Escape
 discards the draft; switching monitor or closing the panel also closes the editor.
 Naming is unavailable for displays without an unambiguous identity.
 
-The **Restore** section offers:
+The **Profiles** section holds the dropdown, **Make Preferred / Preferred** toggle
+and **Save Current Setup**. The **Restore** section beneath it holds **Restore
+Setup** and **Restore Omarchy Defaults**, with **Undo Last Restore** on its own
+row underneath. These controls retain preview and timed confirmation.
+
+The controls offer:
 
 | Control | Result |
 | --- | --- |
 | Profile selector | Choose a saved setup without changing hardware. |
-| Restore Setup… | Preview the selected setup, then choose Apply and Test. |
-| Save Current Setup… | Reveal the setup name, optional inclusions and Save New Profile. |
-| Make Preferred | Choose which saved setup the selector initially offers; does not apply it. |
-| Undo Last Restore… | Preview the exact backup of the last kept restore. |
-| Restore Omarchy Defaults… | Preview a reset that explicitly warns custom fixes and aliases will be replaced. |
+| Restore Setup | Preview the selected setup, then choose Apply and Test. |
+| Save Current Setup | Reveal the setup name, optional inclusions and Save New Profile. |
+| Make Preferred / Preferred | Toggle the selected profile as preferred. Setting another replaces the old choice; clicking Preferred clears it. Does not apply a setup. |
+| Undo Last Restore | Preview the exact backup of the last kept restore. |
+| Restore Omarchy Defaults | Preview a reset that explicitly warns custom fixes and aliases will be replaced. |
 | Keep Changes | Keep the applied setup within the 20-second confirmation window. |
 | Revert Now | Immediately recover the previous configuration. |
 
@@ -29,7 +34,12 @@ Editors and previews expand only when requested. Keyboard navigation scrolls
 expanded controls into view. Normal panel shortcuts are suspended while typing
 or searching. A working profile is never overwritten automatically or by Save:
 duplicate names (case insensitive) are rejected. Save a new name for a revision.
-The first profile becomes preferred; Make Preferred can change that later.
+The first profile becomes preferred. The toggle follows the selected dropdown
+entry immediately: it is active only for the single saved preferred ID. Changes
+made in another widget instance synchronize through the persisted preference.
+Clicking Preferred clears the preference; with none set the selector falls back
+to an available profile without marking it preferred. Saving another profile
+does not override an explicitly cleared preference.
 
 ## Captured settings and matching
 
@@ -179,3 +189,11 @@ rollback, concurrent edits, Keep, Undo and expired confirmation. On the developm
 machine the real systemd timeout restored the previous setup; live apply/Keep,
 Undo preview/apply and explicit Revert passed. Broad dock/hotplug and optional DDC
 profile restoration still need hardware acceptance before the PR leaves draft.
+
+
+The Profiles and Restore action buttons use shared bordered controls and spacing.
+The preferred toggle has a stable width so its shorter active label does not move
+Save Current Setup. The restore actions can wrap on narrow panels; Undo stays
+underneath. Button labels have no trailing ellipses. CLI `prefer --id ID` remains
+idempotent; `toggle-preferred --id ID` performs the widget's atomic toggle under
+the shared lock.

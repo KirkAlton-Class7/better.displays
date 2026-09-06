@@ -144,7 +144,7 @@ that choice. Reopening returns to the widget's own monitor. If that screen is
 unavailable, the monitor refresh falls back to the focused connected monitor,
 then the first available monitor.
 
-**Restore Omarchy Defaults…**, under **Restore**, previews a reset of all configured monitor declarations to Omarchy's
+**Restore Omarchy Defaults**, under **Restore**, previews a reset of all configured monitor declarations to Omarchy's
 installed policy: preferred resolution, automatic scale and position, and normal
 orientation. Existing terminal font sizes reset from installed Omarchy templates
 (currently 9pt); reopen terminals afterward. All saved display names are cleared,
@@ -160,10 +160,10 @@ are in [the configuration runbook](docs/brightness-and-monitor-safety.md#click-f
 
 ### Named setups (version 1.3)
 
-Use **Save Current Setup…** to reveal profile naming and optional brightness/font
-inclusions. **Restore Setup…** previews a saved configuration, then **Apply and
+Use **Save Current Setup** to reveal profile naming and optional brightness/font
+inclusions. **Restore Setup** previews a saved configuration, then **Apply and
 Test** offers **Keep Changes / Revert Now**. **Make Preferred** chooses your normal
-restore profile. **Undo Last Restore…** recovers the last kept restore when its
+restore profile. **Undo Last Restore** recovers the last kept restore when its
 files and connected hardware have not changed. Profiles match hardware identities,
 survive plugin updates and never overwrite another saved setup.
 
@@ -176,3 +176,11 @@ See [named setup controls, storage, recovery, CLI and tests](docs/display-profil
 for the current restore behavior, including disconnected monitors, optional scope,
 timed rollback and driver fallback handling. This supersedes the older direct
 reset flow described in historical enhancement notes.
+
+
+The Profiles and Restore action buttons use shared bordered controls and spacing.
+The preferred toggle has a stable width so its shorter active label does not move
+Save Current Setup. The restore actions can wrap on narrow panels; Undo stays
+underneath. Button labels have no trailing ellipses. CLI `prefer --id ID` remains
+idempotent; `toggle-preferred --id ID` performs the widget's atomic toggle under
+the shared lock.

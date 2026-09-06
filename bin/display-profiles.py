@@ -149,6 +149,15 @@ def save_profile(name, brightness=False, terminals=False):
     return key
 
 
+def set_preferred(key, toggle=False):
+    validate(read_json(PROFILES / (identifier(key) + '.json')))
+    path = PROFILES.parent / 'preferred-profile.json'
+    current = read_json(path, {}).get('id', '')
+    selected = '' if toggle and current == key else key
+    write_json(path, {'id': selected})
+    return dict(preferred=selected, message='Preferred restore profile updated.' if selected else 'No preferred restore profile selected.')
+
+
 def edit_profile_monitor(text, connector, fields):
     if not re.fullmatch(r'[A-Za-z0-9_-]+', connector): raise ValueError('Unsupported connector name')
     if not re.search(r'\boutput\s*=\s*"' + re.escape(connector) + r'"', text):
@@ -411,7 +420,7 @@ def public_status():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['list', 'save', 'prefer', 'preview', 'start', 'keep', 'revert', 'status'])
+    parser.add_argument('action', choices=['list', 'save', 'prefer', 'toggle-preferred', 'preview', 'start', 'keep', 'revert', 'status'])
     parser.add_argument('--name')
     parser.add_argument('--id', default='')
     parser.add_argument('--kind', choices=['profile', 'defaults', 'undo'], default='profile')
@@ -477,10 +486,8 @@ def main():
         else:
             if active(pending()): raise ValueError('Keep or revert the pending restore first')
             if args.action == 'save': print(encoded(dict(id=save_profile(args.name, args.brightness, args.terminals), message='Setup saved as a new profile.')))
-            elif args.action == 'prefer':
-                validate(read_json(PROFILES / (identifier(args.id) + '.json')))
-                write_json(PROFILES.parent / 'preferred-profile.json', {'id': args.id})
-                print(encoded(dict(message='Preferred restore profile updated.')))
+            elif args.action in ('prefer', 'toggle-preferred'):
+                print(encoded(set_preferred(args.id, toggle=args.action == 'toggle-preferred')))
             elif args.action == 'preview':
                 plan, _, _, summary = build(args.kind, args.id)
                 preflight(plan)

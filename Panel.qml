@@ -389,7 +389,7 @@ Panel {
             root.profileEditing = false
             keyCatcher.forceActiveFocus()
             root.defaultsMessage = result.message
-          } else if (action === "prefer") root.defaultsMessage = result.message
+          } else if (action === "prefer" || action === "toggle-preferred") { root.preferredProfile = result.preferred; root.defaultsMessage = result.message }
           else {
             root.restoreState = result
             root.previewText = ""
@@ -917,7 +917,7 @@ Panel {
         }
 
         PanelSeparator { foreground: root.bar.foreground }
-        PanelSectionHeader { text: "Restore"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        PanelSectionHeader { text: "Profiles"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
         SearchableDropdown {
           id: profileDropdown
           property int navRow: 12
@@ -938,38 +938,25 @@ Panel {
           width: parent.width
           spacing: Style.spacing.xs
           NavigationButton {
+            bordered: true
             navRow: 13; navColumn: 0
-            text: "Restore Setup…"
+            width: Style.space(150)
+            text: !!root.selectedProfile && root.selectedProfile === root.preferredProfile ? "Preferred" : "Make Preferred"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
-            enabled: !root.restoreBusy && !!root.selectedProfile && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-            onClicked: root.profileAction("preview", "profile", root.selectedProfile)
+            active: !!root.selectedProfile && root.selectedProfile === root.preferredProfile
+            enabled: !root.restoreBusy && !!root.selectedProfile
+            onClicked: root.profileAction("toggle-preferred", "", root.selectedProfile)
           }
           NavigationButton {
+            bordered: true
             navRow: 13; navColumn: 1
-            text: "Save Current Setup…"
+            text: "Save Current Setup"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
             onClicked: { root.profileEditing = !root.profileEditing; root.previewText = ""; if (root.profileEditing) Qt.callLater(function() { profileNameField.forceActiveFocus(); root.reveal(profileEditor) }) }
           }
-          NavigationButton {
-            navRow: 13; navColumn: 2
-            text: "Undo Last Restore…"
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            enabled: root.canUndo && !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-            onClicked: root.profileAction("preview", "undo", "")
-          }
-        }
-        NavigationButton {
-          navRow: 13; navColumn: 3
-          text: root.selectedProfile === root.preferredProfile ? "Preferred Setup" : "Make Preferred"
-          foreground: root.bar.foreground
-          fontFamily: root.bar.fontFamily
-          active: root.selectedProfile === root.preferredProfile
-          enabled: !root.restoreBusy && !!root.selectedProfile && root.selectedProfile !== root.preferredProfile
-          onClicked: root.profileAction("prefer", "", root.selectedProfile)
         }
         Column {
           id: profileEditor
@@ -996,6 +983,7 @@ Panel {
             width: parent.width
             spacing: Style.spacing.xs
             NavigationButton {
+            bordered: true
               navRow: 15; navColumn: 0
               text: root.saveBrightness ? "✓ Include brightness" : "Include brightness"
               active: root.saveBrightness
@@ -1004,6 +992,7 @@ Panel {
               onClicked: root.saveBrightness = !root.saveBrightness
             }
             NavigationButton {
+            bordered: true
               navRow: 15; navColumn: 1
               text: root.saveTerminals ? "✓ Include terminal fonts" : "Include terminal fonts"
               active: root.saveTerminals
@@ -1015,6 +1004,7 @@ Panel {
           Row {
             spacing: Style.spacing.xs
             NavigationButton {
+            bordered: true
               navRow: 16; navColumn: 0
               text: "Save New Profile"
               foreground: root.bar.foreground
@@ -1023,6 +1013,7 @@ Panel {
               onClicked: root.profileAction("save", "", "")
             }
             NavigationButton {
+            bordered: true
               navRow: 16; navColumn: 1
               text: "Cancel"
               foreground: root.bar.foreground
@@ -1031,13 +1022,38 @@ Panel {
             }
           }
         }
+        PanelSeparator { foreground: root.bar.foreground }
+        PanelSectionHeader { text: "Restore"; foreground: root.bar.foreground; fontFamily: root.bar.fontFamily }
+        Flow {
+          width: parent.width
+          spacing: Style.spacing.xs
+          NavigationButton {
+            bordered: true
+            navRow: 17; navColumn: 0
+            text: "Restore Setup"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !root.restoreBusy && !!root.selectedProfile && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: root.profileAction("preview", "profile", root.selectedProfile)
+          }
+          NavigationButton {
+            bordered: true
+            navRow: 17; navColumn: 1
+            text: "Restore Omarchy Defaults"
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+            onClicked: root.profileAction("preview", "defaults", "")
+          }
+        }
         NavigationButton {
-          navRow: 17
-          text: "Restore Omarchy Defaults…"
+            bordered: true
+          navRow: 18
+          text: "Undo Last Restore"
           foreground: root.bar.foreground
           fontFamily: root.bar.fontFamily
-          enabled: !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
-          onClicked: root.profileAction("preview", "defaults", "")
+          enabled: root.canUndo && !root.restoreBusy && !actionProc.running && !nameAction.running && !brightnessWrite.running && root.pendingBrightness < 0
+          onClicked: root.profileAction("preview", "undo", "")
         }
         Text {
           width: parent.width
@@ -1054,7 +1070,8 @@ Panel {
           visible: root.previewText !== "" && !root.restoreBusy
           spacing: Style.spacing.xs
           NavigationButton {
-            navRow: 18; navColumn: 0
+            bordered: true
+            navRow: 19; navColumn: 0
             text: "Apply and Test"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1062,7 +1079,8 @@ Panel {
             onClicked: root.profileAction("start", root.previewKind, root.previewId)
           }
           NavigationButton {
-            navRow: 18; navColumn: 1
+            bordered: true
+            navRow: 19; navColumn: 1
             text: "Cancel"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1085,7 +1103,8 @@ Panel {
           onVisibleChanged: if (visible) Qt.callLater(function() { root.reveal(confirmationRow) })
           spacing: Style.spacing.xs
           NavigationButton {
-            navRow: 19; navColumn: 0
+            bordered: true
+            navRow: 20; navColumn: 0
             text: "Keep Changes"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
@@ -1093,7 +1112,8 @@ Panel {
             onClicked: root.profileAction("keep", "", "")
           }
           NavigationButton {
-            navRow: 19; navColumn: 1
+            bordered: true
+            navRow: 20; navColumn: 1
             text: "Revert Now"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
